@@ -19,16 +19,16 @@
 
 static void usage()
 {
-        fprintf(stderr,
-                "usage: [options] send phoneNumber message\n"
-                "       [options] recv [raw]> msg.txt \n"
-                "       [options] status \n"
+	fprintf(stderr,
+		"usage: [options] send phoneNumber message\n"
+		"       [options] recv [raw]\n"
+		"       [options] status\n"
 		"       [options] delete msg_index | all\n"
-                "options:\n"
+		"options:\n"
 		"\t-D /dev/ttyUSB1\n"
-                "\t-b 115200\n"
+		"\t-b 115200\n"
 		);
-        exit(2);
+	exit(2);
 }
 
 static struct termios save_tio;
