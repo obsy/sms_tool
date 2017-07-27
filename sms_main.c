@@ -25,8 +25,8 @@ static void usage()
 		"       [options] status\n"
 		"       [options] delete msg_index | all\n"
 		"options:\n"
-		"\t-d /dev/ttyUSB0\n"
-		"\t-b 115200\n"
+		"\t-d <tty device>\n"
+		"\t-b <baudrate>\n"
 		);
 	exit(2);
 }
