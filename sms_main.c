@@ -25,7 +25,7 @@ static void usage()
 		"       [options] status\n"
 		"       [options] delete msg_index | all\n"
 		"options:\n"
-		"\t-D /dev/ttyUSB1\n"
+		"\t-d /dev/ttyUSB0\n"
 		"\t-b 115200\n"
 		);
 	exit(2);
@@ -33,7 +33,7 @@ static void usage()
 
 static struct termios save_tio;
 static int port = -1;
-static const char* dev = "/dev/ttyUSB1";
+static const char* dev = "/dev/ttyUSB0";
 
 static void setserial(int baudrate)
 {
@@ -135,11 +135,11 @@ int main(int argc, char* argv[])
         int baudrate = 115200;
 	int raw = 0;
 	
-	while ((ch = getopt(argc, argv, "b:D:sh")) != -1){
+	while ((ch = getopt(argc, argv, "b:d:h")) != -1){
 		switch (ch) {
 		case 'b': baudrate = atoi(optarg); break;
-		case 'D': dev = optarg; break;
-		case 'h': 
+		case 'd': dev = optarg; break;
+		case 'h':
 		default:
 			usage();
 		}
