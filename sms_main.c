@@ -224,7 +224,10 @@ int main(int argc, char* argv[])
 	if (!strcmp("send", argv[0]))
 	{
 		fputs("AT+CMGF=0\r\n", pf);
-		sleep(1);
+		while(fgets(buf, sizeof(buf), pfi)) {
+			if(starts_with("OK", buf))
+				break;
+		}
 		fputs(cmdstr, pf);
 		sleep(1);
 		fputs(pdustr, pf);
@@ -255,10 +258,13 @@ int main(int argc, char* argv[])
 
 	if (!strcmp("recv", argv[0]))
 	{
-		fputs("AT+CMGF=0\r\n", pf);
-		sleep(1);
-		fputs("AT+CMGL=4\r\n", pf);
 		alarm(10);
+		fputs("AT+CMGF=0\r\n", pf);
+		while(fgets(buf, sizeof(buf), pfi)) {
+			if(starts_with("OK", buf))
+				break;
+		}
+		fputs("AT+CMGL=4\r\n", pf);
 		int idx[1024];
 		int count  = 0;
 		while(fgets(buf, sizeof buf, pfi))
