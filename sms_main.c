@@ -311,7 +311,7 @@ int main(int argc, char* argv[])
 				
 				printf("From:%s\n",phone_str);
 				char time_data_str[64];
-				strftime(time_data_str,64,"%D %T", localtime(&sms_time));
+				strftime(time_data_str,64,"%D %T", gmtime(&sms_time));
 				printf("Date/Time:%s\n",time_data_str);
 				//printf("Textlen=%d\n",sms_text_length);
 

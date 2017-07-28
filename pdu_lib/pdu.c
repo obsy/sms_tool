@@ -259,9 +259,7 @@ int pdu_decode(const unsigned char* buffer, int buffer_length,
 	sms_broken_time.tm_hour = SwapDecimalNibble(buffer[sms_pid_start + 5]);
 	sms_broken_time.tm_min  = SwapDecimalNibble(buffer[sms_pid_start + 6]);
 	sms_broken_time.tm_sec  = SwapDecimalNibble(buffer[sms_pid_start + 7]);
-	const char gmt_offset   = SwapDecimalNibble(buffer[sms_pid_start + 8]);
-	// GMT offset is expressed in 15 minutes increments.
-	(*output_sms_time) = mktime(&sms_broken_time) - gmt_offset * 15 * 60;
+	(*output_sms_time) = timegm(&sms_broken_time);
 
 	const int sms_start = sms_pid_start + 2 + 7;
 	if (sms_start + 1 > buffer_length) return -1;  // Invalid input buffer.
