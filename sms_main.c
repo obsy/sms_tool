@@ -223,6 +223,8 @@ int main(int argc, char* argv[])
 	char buf[1024];
 	if (!strcmp("send", argv[0]))
 	{
+		fputs("AT+CMGF=0\r\n", pf);
+		sleep(1);
 		fputs(cmdstr, pf);
 		sleep(1);
 		fputs(pdustr, pf);
@@ -253,6 +255,8 @@ int main(int argc, char* argv[])
 
 	if (!strcmp("recv", argv[0]))
 	{
+		fputs("AT+CMGF=0\r\n", pf);
+		sleep(1);
 		fputs("AT+CMGL=4\r\n", pf);
 		alarm(10);
 		int idx[1024];
