@@ -21,6 +21,7 @@ enum {
 
 	TYPE_OF_ADDRESS_INTERNATIONAL_PHONE = 0x91,
 	TYPE_OF_ADDRESS_NATIONAL_SUBSCRIBER = 0xC8,
+	TYPE_OF_ADDRESS_ALPHANUMERIC = 0xD0,
 
 	SMS_DELIVER_ONE_MESSAGE = 0x04,
 	SMS_SUBMIT              = 0x11,
@@ -241,7 +242,7 @@ int pdu_decode(const unsigned char* buffer, int buffer_length,
 		return -3;  // Buffer too small to hold decoded phone number.
 
 	const int sender_type_of_address = buffer[sms_deliver_start + 2];
-	if (sender_type_of_address == 0xd0) {
+	if (sender_type_of_address == TYPE_OF_ADDRESS_ALPHANUMERIC) {
 		int sms_text_length;
 		DecodePDUMessage_GSM_7bit(buffer + sms_deliver_start + 3, sender_number_length, output_sender_phone_number, sms_text_length);
 	} else {
