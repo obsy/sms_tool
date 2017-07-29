@@ -25,8 +25,9 @@ static void usage()
 		"       [options] status\n"
 		"       [options] delete msg_index | all\n"
 		"options:\n"
-		"\t-d <tty device>\n"
-		"\t-b <baudrate>\n"
+		"\t-d <tty device> (default: /dev/ttyUSB0)\n"
+		"\t-b <baudrate> (default: 115200)\n"
+		"\t-s <preferred storage> (default: SM)\n"
 		);
 	exit(2);
 }
@@ -34,6 +35,7 @@ static void usage()
 static struct termios save_tio;
 static int port = -1;
 static const char* dev = "/dev/ttyUSB0";
+static const char* storage = "SM";
 
 static void setserial(int baudrate)
 {
@@ -135,10 +137,11 @@ int main(int argc, char* argv[])
         int baudrate = 115200;
 	int raw = 0;
 	
-	while ((ch = getopt(argc, argv, "b:d:h")) != -1){
+	while ((ch = getopt(argc, argv, "b:d:s:h")) != -1){
 		switch (ch) {
 		case 'b': baudrate = atoi(optarg); break;
 		case 'd': dev = optarg; break;
+		case 's': storage = optarg; break;
 		case 'h':
 		default:
 			usage();
@@ -259,6 +262,13 @@ int main(int argc, char* argv[])
 	if (!strcmp("recv", argv[0]))
 	{
 		alarm(10);
+		fputs("AT+CPMS=\"", pf);
+		fputs(storage, pf);
+		fputs("\"\r\n", pf);
+		while(fgets(buf, sizeof(buf), pfi)) {
+			if(starts_with("OK", buf))
+				break;
+		}
 		fputs("AT+CMGF=0\r\n", pf);
 		while(fgets(buf, sizeof(buf), pfi)) {
 			if(starts_with("OK", buf))
