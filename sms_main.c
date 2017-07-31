@@ -270,7 +270,6 @@ int main(int argc, char* argv[])
 				if(starts_with("OK", buf))
 					break;
 			}
-			printf("Wysłano: %s\n", storage);
 		}
 		fputs("AT+CMGF=0\r\n", pf);
 		while(fgets(buf, sizeof(buf), pfi)) {
@@ -397,15 +396,24 @@ int main(int argc, char* argv[])
 	
 	if (!strcmp("status", argv[0]))
 	{
-		fputs("AT+CSQ\r\n", pf);
+		fputs("AT+CPMS?\r\n", pf);
 		alarm(10);
 		while(fgets(buf, sizeof buf, pfi))
 		{
-			if(starts_with("+CSQ:", buf))
+			if(starts_with("+CPMS:", buf))
 			{
-				int rssi = atoi(buf+5);
-				int ber = atoi(buf+10);
-				printf("rssi=%d\nber=%d\n",rssi,ber);
+				char mem1[9];
+				int mem1_used, mem1_total;
+				if(sscanf(buf, "+CPMS: \"%2s\",%d,%d,", mem1, &mem1_used, &mem1_total) != 3)
+				{
+					fprintf(stderr, "unparsable CPMS response: %s\n", buf);
+					break;
+				}
+				printf("Storage type: %s, used: %d, total: %d\n", mem1, mem1_used, mem1_total);
+				break;
+			}
+			if(starts_with("OK", buf))
+			{
 				break;
 			}
 		}
