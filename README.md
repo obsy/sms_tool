@@ -11,10 +11,10 @@ Usage:
 	root@lede:~# sms_tool
 	usage: [options] send phoneNumber message
 	       [options] recv [raw]
-	       [options] status
 	       [options] delete msg_index | all
+	       [options] status
 	options:
 	       -d <tty device> (default /dev/ttyUSB0)
 	       -b <baudrate> (default 115200)
-	       -s <preferred storage> (default SM)
+	       -s <preferred storage>
 
