@@ -29,8 +29,8 @@ static void usage()
 		"\t-d <tty device> (default: /dev/ttyUSB0)\n"
 		"\t-b <baudrate> (default: 115200)\n"
 		"\t-s <preferred storage>\n"
-		"\t-R use raw input (for ussd)"
-		"\t-r use raw output (for ussd)"
+		"\t-R use raw input (for ussd)\n"
+		"\t-r use raw output (for ussd and sms/recv)\n"
 		);
 	exit(2);
 }
@@ -140,7 +140,6 @@ int main(int argc, char* argv[])
 	int baudrate = 115200;
 	int rawinput = 0;
 	int rawoutput = 0;
-	int raw = 0;
 
 	while ((ch = getopt(argc, argv, "b:d:s:hRr")) != -1){
 		switch (ch) {
@@ -169,14 +168,8 @@ int main(int argc, char* argv[])
 	{
 		if(argc < 2)
 			usage();
-	}
-	else if (!strcmp("recv", argv[0]))
+	}else if (!strcmp("recv", argv[0]))
 	{
-		if(argc>1)
-			if(!strcmp("raw",argv[1]))
-			{
-				raw = 1;
-			}
 	}else if (!strcmp("status", argv[0]))
 	{
 	}else if (!strcmp("ussd", argv[0]))
@@ -304,17 +297,18 @@ int main(int argc, char* argv[])
 				printf("MSG: %d\n",idx[count]);
 
 				++count;
+
+				if(rawoutput==1)
+				{
+					printf("%s\n",buf);
+					continue;
+				}
+
 				unsigned char pdu[SMS_MAX_PDU_LENGTH];
 				int l = strlen(buf);
 				int i;
 				for(i = 0; i < l; i+=2)
 					pdu[i/2] = 16*char_to_hex(buf[i]) + char_to_hex(buf[i+1]);
-
-				if(raw==1)
-				{
-					printf("%s\n",buf);
-					continue;
-				}
 
 				time_t sms_time;
 				char phone_str[40];
