@@ -21,9 +21,9 @@ static void usage()
 {
 	fprintf(stderr,
 		"usage: [options] send phoneNumber message\n"
-		"       [options] recv [raw]\n"
-		"       [options] status\n"
+		"       [options] recv\n"
 		"       [options] delete msg_index | all\n"
+		"       [options] status\n"
 		"       [options] ussd code\n"
 		"options:\n"
 		"\t-d <tty device> (default: /dev/ttyUSB0)\n"
