@@ -54,7 +54,7 @@ SwapDecimalNibble(const unsigned char x)
 
 
 // Encode PDU message by merging 7 bit ASCII characters into 8 bit octets.
-static int
+int
 EncodePDUMessage(const char* sms_text, int sms_text_length, unsigned char* output_buffer, int buffer_size)
 {
 	// Check if output buffer is big enough.
@@ -84,7 +84,7 @@ EncodePDUMessage(const char* sms_text, int sms_text_length, unsigned char* outpu
 
 // Decode PDU message by splitting 8 bit encoded buffer into 7 bit ASCII
 // characters.
-static int
+int
 DecodePDUMessage_GSM_7bit(const unsigned char* buffer, int buffer_length, char* output_sms_text, int sms_text_length)
 {
 	int output_text_length = 0;

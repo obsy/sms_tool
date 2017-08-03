@@ -35,4 +35,14 @@ int pdu_decode(const unsigned char* pdu, int pdu_len,
 
 int ucs2_to_utf8 (int ucs2, unsigned char * utf8);
 
+int DecodePDUMessage_GSM_7bit(const unsigned char* buffer,
+			      int buffer_length,
+			      char* output_sms_text,
+			      int sms_text_length);
+
+int EncodePDUMessage(const char* sms_text,
+		     int sms_text_length,
+		     unsigned char* output_buffer,
+		     int buffer_size);
+
 #endif   // SMS_SMS_H_

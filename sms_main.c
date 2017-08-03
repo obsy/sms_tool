@@ -24,10 +24,13 @@ static void usage()
 		"       [options] recv [raw]\n"
 		"       [options] status\n"
 		"       [options] delete msg_index | all\n"
+		"       [options] ussd code\n"
 		"options:\n"
 		"\t-d <tty device> (default: /dev/ttyUSB0)\n"
 		"\t-b <baudrate> (default: 115200)\n"
 		"\t-s <preferred storage>\n"
+		"\t-R use raw input (for ussd)"
+		"\t-r use raw output (for ussd)"
 		);
 	exit(2);
 }
@@ -135,13 +138,17 @@ int main(int argc, char* argv[])
 {
 	int ch;
 	int baudrate = 115200;
+	int rawinput = 0;
+	int rawoutput = 0;
 	int raw = 0;
 
-	while ((ch = getopt(argc, argv, "b:d:s:h")) != -1){
+	while ((ch = getopt(argc, argv, "b:d:s:hRr")) != -1){
 		switch (ch) {
 		case 'b': baudrate = atoi(optarg); break;
 		case 'd': dev = optarg; break;
 		case 's': storage = optarg; break;
+		case 'R': rawinput = 1; break;
+		case 'r': rawoutput = 1; break;
 		case 'h':
 		default:
 			usage();
@@ -172,6 +179,10 @@ int main(int argc, char* argv[])
 			}
 	}else if (!strcmp("status", argv[0]))
 	{
+	}else if (!strcmp("ussd", argv[0]))
+	{
+		if(argc < 2)
+			usage();
 	}else
 		usage();
 
@@ -409,6 +420,59 @@ int main(int argc, char* argv[])
 			}
 			if(starts_with("OK", buf))
 			{
+				break;
+			}
+		}
+	}
+
+	if (!strcmp("ussd", argv[0]))
+	{
+		if (rawinput==1)
+		{
+			snprintf(cmdstr, sizeof(cmdstr), "AT+CUSD=1,\"%s\",15\r\n", argv[1]);
+		}
+		else
+		{
+			unsigned char pdu[SMS_MAX_PDU_LENGTH];
+			if (EncodePDUMessage(argv[1], sizeof(argv[1]), pdu, SMS_MAX_PDU_LENGTH) > 0)
+				snprintf(cmdstr, sizeof(cmdstr), "AT+CUSD=1,\"%s\",15\r\n", pdu);
+			else
+				fprintf(stderr, "error encoding to PDU: %s\n", argv[1]);
+		}
+
+		fputs(cmdstr, pf);
+		alarm(10);
+		char ussd_buf[320];
+		char ussd_txt[160];
+		while(fgets(buf, sizeof buf, pfi))
+		{
+			if(starts_with("OK", buf))
+				continue;
+			if(starts_with("+CUSD:", buf))
+			{
+				if(sscanf(buf, "+CUSD: 0,\"%[^\"]\",15", ussd_buf) != 1)
+				{
+					fprintf(stderr, "unparsable CUSD response: %s\n", buf+10);
+					break;
+				}
+
+				if(rawoutput==1)
+				{
+					printf("%s\n", ussd_buf);
+					break;
+				}
+
+				unsigned char pdu[SMS_MAX_PDU_LENGTH];
+				int l = strlen(ussd_buf);
+				int i;
+				for(i = 0; i < l; i+=2)
+					pdu[i/2] = 16*char_to_hex(ussd_buf[i]) + char_to_hex(ussd_buf[i+1]);
+
+				if (DecodePDUMessage_GSM_7bit(pdu, sizeof(pdu), ussd_txt, sizeof(ussd_txt)) > 0)
+					printf("%s\n", ussd_txt);
+				else
+					fprintf(stderr, "error decoding pdu: %s\n", ussd_buf);
+
 				break;
 			}
 		}
