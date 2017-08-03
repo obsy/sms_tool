@@ -39,14 +39,14 @@ static const char* storage = "";
 
 static void setserial(int baudrate)
 {
-        struct termios t;
-        if (tcgetattr(port, &t) < 0)
+	struct termios t;
+	if (tcgetattr(port, &t) < 0)
 		fprintf(stderr,"tcgetattr(%s)\n", dev);
 
 	memmove(&save_tio, &t, sizeof(t));
 
 	cfmakeraw(&t);
-	
+
 	t.c_cflag |=CLOCAL;
 	t.c_cflag |=CREAD;
 
@@ -56,12 +56,12 @@ static void setserial(int baudrate)
 // parity
 	t.c_cflag &= ~PARENB;
 // stop bits
-        t.c_cflag &=~CSTOPB;
-//flow control
-        t.c_cflag &=~CRTSCTS;
+	t.c_cflag &=~CSTOPB;
+// flow control
+	t.c_cflag &=~CRTSCTS;
 
-        t.c_oflag &=~OPOST;
-        t.c_cc[VMIN]=1;
+	t.c_oflag &=~OPOST;
+	t.c_cc[VMIN]=1;
 
 	switch (baudrate)
 	{
@@ -134,9 +134,9 @@ static int char_to_hex(char c)
 int main(int argc, char* argv[])
 {
 	int ch;
-        int baudrate = 115200;
+	int baudrate = 115200;
 	int raw = 0;
-	
+
 	while ((ch = getopt(argc, argv, "b:d:s:h")) != -1){
 		switch (ch) {
 		case 'b': baudrate = atoi(optarg); break;
@@ -148,9 +148,9 @@ int main(int argc, char* argv[])
 		}
 	}
 
-        argv += optind; argc -= optind;
+	argv += optind; argc -= optind;
 
-        if (argc < 1)
+	if (argc < 1)
 		usage();
 	if (!strcmp("send", argv[0]))
 	{
@@ -174,15 +174,15 @@ int main(int argc, char* argv[])
 	{
 	}else
 		usage();
-	
+
 	signal(SIGALRM,timeout);
-	
+
 	char cmdstr[100];
 	char pdustr[2*SMS_MAX_PDU_LENGTH+4];
 
 	if (!strcmp("send", argv[0])) {
 		printf("sending sms to +%s: \"%s\"\n", argv[1], argv[2]);
-		
+
 		unsigned char pdu[SMS_MAX_PDU_LENGTH];
 		int pdu_len = pdu_encode("", argv[1], argv[2], pdu, sizeof(pdu));
 		if (pdu_len < 0)
@@ -206,13 +206,10 @@ int main(int argc, char* argv[])
 	setserial(baudrate);
 	atexit(resetserial);
 
-	//fprintf(stderr, "opened port %s", dev);
-
 	close(port);
 	port = open(dev, O_RDWR|O_NOCTTY);
 	if (port < 0)
 		fprintf(stderr,"reopen(%s)\n", dev);
-	//syslog(LOG_DEBUG, "reopened port %s", dev);
 
 	FILE* pf = fdopen(port, "w");
 	FILE* pfi = fdopen(port, "r");
@@ -234,7 +231,7 @@ int main(int argc, char* argv[])
 		fputs(cmdstr, pf);
 		sleep(1);
 		fputs(pdustr, pf);
-	
+
 		alarm(5);
 		errno = 0;
 
@@ -292,22 +289,22 @@ int main(int argc, char* argv[])
 				}
 				if(!fgets(buf, sizeof buf, pfi))
 					fprintf(stderr,"reading pdu %d\n", count);
-				
+
 				printf("MSG: %d\n",idx[count]);
-				
+
 				++count;
 				unsigned char pdu[SMS_MAX_PDU_LENGTH];
 				int l = strlen(buf);
 				int i;
 				for(i = 0; i < l; i+=2)
 					pdu[i/2] = 16*char_to_hex(buf[i]) + char_to_hex(buf[i+1]);
-				
+
 				if(raw==1)
 				{
 					printf("%s\n",buf);
 					continue;
 				}
-				
+
 				time_t sms_time;
 				char phone_str[40];
 				char sms_txt[161];
@@ -321,11 +318,10 @@ int main(int argc, char* argv[])
 					continue;
 				}
 				
-				printf("From:%s\n",phone_str);
+				printf("From: %s\n",phone_str);
 				char time_data_str[64];
 				strftime(time_data_str,64,"%D %T", gmtime(&sms_time));
-				printf("Date/Time:%s\n",time_data_str);
-				//printf("Textlen=%d\n",sms_text_length);
+				printf("Date/Time: %s\n",time_data_str);
 
 				switch(tp_dcs_type)
 				{
@@ -342,7 +338,6 @@ int main(int argc, char* argv[])
 							i = 0x000000FF&sms_txt[0]+1;
 							printf("SMS segment %d of %d\n",0x000000FF&sms_txt[i-2],0x000000FF&sms_txt[i-1]);
 						}
-						//printf("skip_bytes %d,%d\n",skip_bytes,i);
 						for(;i<sms_len;i+=2)
 						{
 							int ucs2_char = 0x000000FF&sms_txt[i+1];
@@ -393,7 +388,7 @@ int main(int argc, char* argv[])
 			}
 		}
 	}
-	
+
 	if (!strcmp("status", argv[0]))
 	{
 		fputs("AT+CPMS?\r\n", pf);
@@ -421,4 +416,3 @@ int main(int argc, char* argv[])
 
 	return 0;
 }
-
