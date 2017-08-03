@@ -1,4 +1,5 @@
 /*
+ * 2017 Cezary Jackiewicz <cezary@eko.one.pl>
  * 2014 lovewilliam <ztong@vt.edu>
  */
 // Copyright 2011 The Avalon Project Authors. All rights reserved.
