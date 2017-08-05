@@ -342,7 +342,7 @@ int main(int argc, char* argv[])
 						if((skip_bytes&0x04)==0x04)
 						{
 							i = 0x000000FF&sms_txt[0]+1;
-							printf("SMS segment %d of %d\n",0x000000FF&sms_txt[i-2],0x000000FF&sms_txt[i-1]);
+							printf("SMS segment %d of %d\n",0x000000FF&sms_txt[i-1],0x000000FF&sms_txt[i-2]);
 						}
 						for(;i<sms_len;i+=2)
 						{
