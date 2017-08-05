@@ -333,7 +333,7 @@ int main(int argc, char* argv[])
 				{
 					case 0:
 					{
-						printf("%s\n", sms_txt);
+						printf("%s", sms_txt);
 						break;
 					}
 					case 8:
