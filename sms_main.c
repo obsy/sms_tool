@@ -30,6 +30,7 @@ static void usage()
 		"\t-d <tty device> (default: /dev/ttyUSB0)\n"
 		"\t-b <baudrate> (default: 115200)\n"
 		"\t-s <preferred storage>\n"
+		"\t-f <date/time format>\n"
 		"\t-R use raw input (for ussd)\n"
 		"\t-r use raw output (for ussd and sms/recv)\n"
 		);
@@ -40,6 +41,7 @@ static struct termios save_tio;
 static int port = -1;
 static const char* dev = "/dev/ttyUSB0";
 static const char* storage = "";
+static const char* dateformat = "%D %T";
 
 static void setserial(int baudrate)
 {
@@ -142,14 +144,14 @@ int main(int argc, char* argv[])
 	int rawinput = 0;
 	int rawoutput = 0;
 
-	while ((ch = getopt(argc, argv, "b:d:s:hRr")) != -1){
+	while ((ch = getopt(argc, argv, "b:d:s:f:Rr")) != -1){
 		switch (ch) {
 		case 'b': baudrate = atoi(optarg); break;
 		case 'd': dev = optarg; break;
 		case 's': storage = optarg; break;
+		case 'f': dateformat = optarg; break;
 		case 'R': rawinput = 1; break;
 		case 'r': rawoutput = 1; break;
-		case 'h':
 		default:
 			usage();
 		}
@@ -326,7 +328,7 @@ int main(int argc, char* argv[])
 				
 				printf("From: %s\n",phone_str);
 				char time_data_str[64];
-				strftime(time_data_str,64,"%D %T", gmtime(&sms_time));
+				strftime(time_data_str, 64, dateformat, gmtime(&sms_time));
 				printf("Date/Time: %s\n",time_data_str);
 
 				switch(tp_dcs_type)
