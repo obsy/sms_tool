@@ -29,8 +29,8 @@ static void usage()
 		"options:\n"
 		"\t-d <tty device> (default: /dev/ttyUSB0)\n"
 		"\t-b <baudrate> (default: 115200)\n"
-		"\t-s <preferred storage>\n"
-		"\t-f <date/time format>\n"
+		"\t-s <preferred storage> (for sms/recv/status)\n"
+		"\t-f <date/time format> (for sms/recv)\n"
 		"\t-R use raw input (for ussd)\n"
 		"\t-r use raw output (for ussd and sms/recv)\n"
 		);
@@ -399,8 +399,17 @@ int main(int argc, char* argv[])
 
 	if (!strcmp("status", argv[0]))
 	{
-		fputs("AT+CPMS?\r\n", pf);
 		alarm(10);
+		if (strlen(storage) > 0) {
+			fputs("AT+CPMS=\"", pf);
+			fputs(storage, pf);
+			fputs("\"\r\n", pf);
+			while(fgets(buf, sizeof(buf), pfi)) {
+				if(starts_with("OK", buf))
+					break;
+			}
+		}
+		fputs("AT+CPMS?\r\n", pf);
 		while(fgets(buf, sizeof buf, pfi))
 		{
 			if(starts_with("+CPMS:", buf))
