@@ -186,24 +186,7 @@ int main(int argc, char* argv[])
 
 	char cmdstr[100];
 	char pdustr[2*SMS_MAX_PDU_LENGTH+4];
-
-	if (!strcmp("send", argv[0])) {
-		printf("sending sms to +%s: \"%s\"\n", argv[1], argv[2]);
-
-		unsigned char pdu[SMS_MAX_PDU_LENGTH];
-		int pdu_len = pdu_encode("", argv[1], argv[2], pdu, sizeof(pdu));
-		if (pdu_len < 0)
-			fprintf(stderr,"error encoding to PDU: %s \"%s\n", argv[1], argv[2]);
-
-		const int pdu_len_except_smsc = pdu_len - 1 - pdu[0];
-		snprintf(cmdstr, sizeof(cmdstr), "AT+CMGS=%d\r\n", pdu_len_except_smsc);
-
-		int i;
-		for (i = 0; i < pdu_len; ++i)
-			sprintf(pdustr+2*i, "%02X", pdu[i]);
-		printf("pdu: %s\n", pdustr);
-		sprintf(pdustr+2*i, "%c\r\n", 0x1A);   // End PDU mode with Ctrl-Z.
-	}
+	unsigned char pdu[SMS_MAX_PDU_LENGTH];
 
 	// open the port
 
@@ -230,6 +213,18 @@ int main(int argc, char* argv[])
 	char buf[1024];
 	if (!strcmp("send", argv[0]))
 	{
+		int pdu_len = pdu_encode("", argv[1], argv[2], pdu, sizeof(pdu));
+		if (pdu_len < 0)
+			fprintf(stderr,"error encoding to PDU: %s \"%s\n", argv[1], argv[2]);
+
+		const int pdu_len_except_smsc = pdu_len - 1 - pdu[0];
+		snprintf(cmdstr, sizeof(cmdstr), "AT+CMGS=%d\r\n", pdu_len_except_smsc);
+
+		int i;
+		for (i = 0; i < pdu_len; ++i)
+			sprintf(pdustr+2*i, "%02X", pdu[i]);
+		sprintf(pdustr+2*i, "%c\r\n", 0x1A);   // End PDU mode with Ctrl-Z.
+
 		fputs("AT+CMGF=0\r\n", pf);
 		while(fgets(buf, sizeof(buf), pfi)) {
 			if(starts_with("OK", buf))
@@ -244,7 +239,6 @@ int main(int argc, char* argv[])
 
 		while(fgets(buf, sizeof(buf), pfi))
 		{
-			printf("modem: '%s'", buf);
 			if(starts_with("+CMGS:", buf))
 			{
 				printf("sms sent sucessfully: %s", buf + 7);
@@ -307,7 +301,6 @@ int main(int argc, char* argv[])
 					continue;
 				}
 
-				unsigned char pdu[SMS_MAX_PDU_LENGTH];
 				int l = strlen(buf);
 				int i;
 				for(i = 0; i < l; i+=2)
@@ -363,7 +356,7 @@ int main(int argc, char* argv[])
 					default:
 						break;
 				}
-				printf("\n");
+				printf("\n\n");
 			}
 		}
 	}
@@ -439,7 +432,6 @@ int main(int argc, char* argv[])
 		}
 		else
 		{
-			unsigned char pdu[SMS_MAX_PDU_LENGTH];
 			if (EncodePDUMessage(argv[1], sizeof(argv[1]), pdu, SMS_MAX_PDU_LENGTH) > 0)
 				snprintf(cmdstr, sizeof(cmdstr), "AT+CUSD=1,\"%s\",15\r\n", pdu);
 			else
@@ -468,7 +460,6 @@ int main(int argc, char* argv[])
 					break;
 				}
 
-				unsigned char pdu[SMS_MAX_PDU_LENGTH];
 				int l = strlen(ussd_buf);
 				int i;
 				for(i = 0; i < l; i+=2)
