@@ -112,6 +112,59 @@ DecodePDUMessage_GSM_7bit(const unsigned char* buffer, int buffer_length, char* 
 	if (output_text_length < sms_text_length)  // Add last remainder.
 		output_sms_text[output_text_length++] =	buffer[i - 1] >> (8 - carry_on_bits);
 
+	// create 7bit to ascii table
+	int t72ascii[128];
+	for (i = 0; i<128; i++)
+		t72ascii[i] = i;
+
+	t72ascii[0] = 64;
+	t72ascii[1] = 163;
+	t72ascii[2] = 36;
+	t72ascii[3] = 165;
+	t72ascii[4] = 232;
+	t72ascii[5] = 223;
+	t72ascii[6] = 249;
+	t72ascii[7] = 236;
+	t72ascii[8] = 242;
+	t72ascii[9] = 199;
+	t72ascii[11] = 216;
+	t72ascii[12] = 248;
+	t72ascii[14] = 197;
+	t72ascii[15] = 229;
+	t72ascii[16] = 0;
+	t72ascii[17] = 95;
+	t72ascii[18] = 0;
+	t72ascii[19] = 0;
+	t72ascii[20] = 0;
+	t72ascii[21] = 0;
+	t72ascii[22] = 0;
+	t72ascii[23] = 0;
+	t72ascii[24] = 0;
+	t72ascii[25] = 0;
+	t72ascii[26] = 0;
+	t72ascii[27] = 0;
+	t72ascii[28] = 198;
+	t72ascii[29] = 230;
+	t72ascii[30] = 223;
+	t72ascii[31] = 201;
+	t72ascii[36] = 164;
+	t72ascii[64] = 161;
+	t72ascii[91] = 196;
+	t72ascii[92] = 204;
+	t72ascii[93] = 209;
+	t72ascii[94] = 220;
+	t72ascii[95] = 167;
+	t72ascii[96] = 191;
+	t72ascii[123] = 228;
+	t72ascii[124] = 246;
+	t72ascii[125] = 241;
+	t72ascii[126] = 252;
+	t72ascii[127] = 224;
+
+	for (i = 0; i<output_text_length; i++)
+		if (output_sms_text[i] < 128)
+			output_sms_text[i] = t72ascii[output_sms_text[i]];
+
 	return output_text_length;
 }
 
