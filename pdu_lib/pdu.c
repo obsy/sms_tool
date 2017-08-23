@@ -117,25 +117,25 @@ DecodePDUMessage_GSM_7bit(const unsigned char* buffer, int buffer_length, char* 
 
 #define  GSM_7BITS_ESCAPE   0x1b
 
-static const unsigned short gsm7bits_to_unicode[128] = {
+static const unsigned char gsm7bits_to_latin1[128] = {
   '@', 0xa3,  '$', 0xa5, 0xe8, 0xe9, 0xf9, 0xec, 0xf2, 0xc7, '\n', 0xd8, 0xf8, '\r', 0xc5, 0xe5,
-0x394,  '_',0x3a6,0x393,0x39b,0x3a9,0x3a0,0x3a8,0x3a3,0x398,0x39e,    0, 0xc6, 0xe6, 0xdf, 0xc9,
+    0,  '_',    0,    0,    0,    0,    0,    0,    0,    0,    0,    0, 0xc6, 0xe6, 0xdf, 0xc9,
   ' ',  '!',  '"',  '#', 0xa4,  '%',  '&', '\'',  '(',  ')',  '*',  '+',  ',',  '-',  '.',  '/',
   '0',  '1',  '2',  '3',  '4',  '5',  '6',  '7',  '8',  '9',  ':',  ';',  '<',  '=',  '>',  '?',
  0xa1,  'A',  'B',  'C',  'D',  'E',  'F',  'G',  'H',  'I',  'J',  'K',  'L',  'M',  'N',  'O',
-  'P',  'Q',  'R',  'S',  'T',  'U',  'V',  'W',  'X',  'Y',  'Z', 0xc4, 0xd6,0x147, 0xdc, 0xa7,
+  'P',  'Q',  'R',  'S',  'T',  'U',  'V',  'W',  'X',  'Y',  'Z', 0xc4, 0xd6, 0xd1, 0xdc, 0xa7,
  0xbf,  'a',  'b',  'c',  'd',  'e',  'f',  'g',  'h',  'i',  'j',  'k',  'l',  'm',  'n',  'o',
   'p',  'q',  'r',  's',  't',  'u',  'v',  'w',  'x',  'y',  'z', 0xe4, 0xf6, 0xf1, 0xfc, 0xe0,
 };
 
-static const unsigned short gsm7bits_extend_to_unicode[128] = {
+static const unsigned char gsm7bits_extend_to_latin1[128] = {
     0,   0,   0,   0,   0,   0,   0,   0,   0,   0,'\f',   0,   0,   0,   0,   0,
     0,   0,   0,   0, '^',   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
     0,   0,   0,   0,   0,   0,   0,   0, '{', '}',   0,   0,   0,   0,   0,'\\',
     0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0, '[', '~', ']',   0,
   '|',   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
     0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
-    0,   0,   0,   0,   0,0x20ac, 0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+    0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
     0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
 };
 
@@ -147,11 +147,11 @@ G7bitToAscii(char* buffer, int buffer_length)
 	for (i = 0; i<buffer_length; i++) {
 		if (buffer[i] < 128) {
 			if (buffer[i] == GSM_7BITS_ESCAPE) {
-				buffer[i] = gsm7bits_extend_to_unicode[buffer[i + 1]];
+				buffer[i] = gsm7bits_extend_to_latin1[buffer[i + 1]];
 				memmove(&buffer[i + 1], &buffer[i + 2], buffer_length - i - 1);
 				buffer_length--;
 			} else {
-				buffer[i] = gsm7bits_to_unicode[buffer[i]];
+				buffer[i] = gsm7bits_to_latin1[buffer[i]];
 			}
 		}
 	}
