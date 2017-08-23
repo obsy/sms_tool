@@ -112,8 +112,16 @@ DecodePDUMessage_GSM_7bit(const unsigned char* buffer, int buffer_length, char* 
 	if (output_text_length < sms_text_length)  // Add last remainder.
 		output_sms_text[output_text_length++] =	buffer[i - 1] >> (8 - carry_on_bits);
 
-	// create 7bit to ascii table
+	return output_text_length;
+}
+
+static int
+G7bitToAscii(char* buffer, int buffer_length)
+{
+	int i;
 	int t72ascii[128];
+
+	// create 7bit to ascii table
 	for (i = 0; i<128; i++)
 		t72ascii[i] = i;
 
@@ -161,11 +169,11 @@ DecodePDUMessage_GSM_7bit(const unsigned char* buffer, int buffer_length, char* 
 	t72ascii[126] = 252;
 	t72ascii[127] = 224;
 
-	for (i = 0; i<output_text_length; i++)
-		if (output_sms_text[i] < 128)
-			output_sms_text[i] = t72ascii[output_sms_text[i]];
+	for (i = 0; i<buffer_length; i++)
+		if (buffer[i] < 128)
+			buffer[i] = t72ascii[buffer[i]];
 
-	return output_text_length;
+	return buffer_length;
 }
 
 // Encode a digit based phone number for SMS based format.
@@ -297,13 +305,7 @@ int pdu_decode(const unsigned char* buffer, int buffer_length,
 
 	const int sender_type_of_address = buffer[sms_deliver_start + 2];
 	if (sender_type_of_address == TYPE_OF_ADDRESS_ALPHANUMERIC) {
-		int sms_text_length;
-		for(sms_text_length = 0; sms_text_length < sender_number_length; sms_text_length++) {
-			if((buffer + sms_deliver_start + 3)[sms_text_length] == 0) {
-				break;
-			}
-		}
-		DecodePDUMessage_GSM_7bit(buffer + sms_deliver_start + 3, sender_number_length, output_sender_phone_number, sms_text_length);
+		DecodePDUMessage_GSM_7bit(buffer + sms_deliver_start + 3, sender_number_length, output_sender_phone_number, sender_number_length);
 	} else {
 		DecodePhoneNumber(buffer + sms_deliver_start + 3, sender_number_length, output_sender_phone_number);
 	}
@@ -336,6 +338,7 @@ int pdu_decode(const unsigned char* buffer, int buffer_length,
 				int decoded_sms_text_size = DecodePDUMessage_GSM_7bit(buffer + sms_start + 1, buffer_length - (sms_start + 1),
 							   output_sms_text, output_sms_text_length);
 				if (decoded_sms_text_size != output_sms_text_length) return -1;  // Decoder length is not as expected.
+				G7bitToAscii(output_sms_text, output_sms_text_length);
 				break;
 			}
 		case 8:
