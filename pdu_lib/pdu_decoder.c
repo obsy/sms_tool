@@ -57,6 +57,7 @@ int sms_decode()
 	switch(tp_dcs_type)
 	{
 		case 0:
+		case 1:
 			{
 				printf("%s\n", sms_text);
 				break;

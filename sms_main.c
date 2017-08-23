@@ -327,6 +327,7 @@ int main(int argc, char* argv[])
 				switch(tp_dcs_type)
 				{
 					case 0:
+					case 1:
 					{
 						printf("%s", sms_txt);
 						break;
