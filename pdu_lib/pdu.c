@@ -115,63 +115,46 @@ DecodePDUMessage_GSM_7bit(const unsigned char* buffer, int buffer_length, char* 
 	return output_text_length;
 }
 
+#define  GSM_7BITS_ESCAPE   0x1b
+
+static const unsigned short gsm7bits_to_unicode[128] = {
+  '@', 0xa3,  '$', 0xa5, 0xe8, 0xe9, 0xf9, 0xec, 0xf2, 0xc7, '\n', 0xd8, 0xf8, '\r', 0xc5, 0xe5,
+0x394,  '_',0x3a6,0x393,0x39b,0x3a9,0x3a0,0x3a8,0x3a3,0x398,0x39e,    0, 0xc6, 0xe6, 0xdf, 0xc9,
+  ' ',  '!',  '"',  '#', 0xa4,  '%',  '&', '\'',  '(',  ')',  '*',  '+',  ',',  '-',  '.',  '/',
+  '0',  '1',  '2',  '3',  '4',  '5',  '6',  '7',  '8',  '9',  ':',  ';',  '<',  '=',  '>',  '?',
+ 0xa1,  'A',  'B',  'C',  'D',  'E',  'F',  'G',  'H',  'I',  'J',  'K',  'L',  'M',  'N',  'O',
+  'P',  'Q',  'R',  'S',  'T',  'U',  'V',  'W',  'X',  'Y',  'Z', 0xc4, 0xd6,0x147, 0xdc, 0xa7,
+ 0xbf,  'a',  'b',  'c',  'd',  'e',  'f',  'g',  'h',  'i',  'j',  'k',  'l',  'm',  'n',  'o',
+  'p',  'q',  'r',  's',  't',  'u',  'v',  'w',  'x',  'y',  'z', 0xe4, 0xf6, 0xf1, 0xfc, 0xe0,
+};
+
+static const unsigned short gsm7bits_extend_to_unicode[128] = {
+    0,   0,   0,   0,   0,   0,   0,   0,   0,   0,'\f',   0,   0,   0,   0,   0,
+    0,   0,   0,   0, '^',   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+    0,   0,   0,   0,   0,   0,   0,   0, '{', '}',   0,   0,   0,   0,   0,'\\',
+    0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0, '[', '~', ']',   0,
+  '|',   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+    0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+    0,   0,   0,   0,   0,0x20ac, 0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+    0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
+};
+
 static int
 G7bitToAscii(char* buffer, int buffer_length)
 {
 	int i;
-	int t72ascii[128];
 
-	// create 7bit to ascii table
-	for (i = 0; i<128; i++)
-		t72ascii[i] = i;
-
-	t72ascii[0] = 64;
-	t72ascii[1] = 163;
-	t72ascii[2] = 36;
-	t72ascii[3] = 165;
-	t72ascii[4] = 232;
-	t72ascii[5] = 223;
-	t72ascii[6] = 249;
-	t72ascii[7] = 236;
-	t72ascii[8] = 242;
-	t72ascii[9] = 199;
-	t72ascii[11] = 216;
-	t72ascii[12] = 248;
-	t72ascii[14] = 197;
-	t72ascii[15] = 229;
-	t72ascii[16] = 0;
-	t72ascii[17] = 95;
-	t72ascii[18] = 0;
-	t72ascii[19] = 0;
-	t72ascii[20] = 0;
-	t72ascii[21] = 0;
-	t72ascii[22] = 0;
-	t72ascii[23] = 0;
-	t72ascii[24] = 0;
-	t72ascii[25] = 0;
-	t72ascii[26] = 0;
-	t72ascii[27] = 0;
-	t72ascii[28] = 198;
-	t72ascii[29] = 230;
-	t72ascii[30] = 223;
-	t72ascii[31] = 201;
-	t72ascii[36] = 164;
-	t72ascii[64] = 161;
-	t72ascii[91] = 196;
-	t72ascii[92] = 204;
-	t72ascii[93] = 209;
-	t72ascii[94] = 220;
-	t72ascii[95] = 167;
-	t72ascii[96] = 191;
-	t72ascii[123] = 228;
-	t72ascii[124] = 246;
-	t72ascii[125] = 241;
-	t72ascii[126] = 252;
-	t72ascii[127] = 224;
-
-	for (i = 0; i<buffer_length; i++)
-		if (buffer[i] < 128)
-			buffer[i] = t72ascii[buffer[i]];
+	for (i = 0; i<buffer_length; i++) {
+		if (buffer[i] < 128) {
+			if (buffer[i] == GSM_7BITS_ESCAPE) {
+				buffer[i] = gsm7bits_extend_to_unicode[buffer[i + 1]];
+				memmove(&buffer[i + 1], &buffer[i + 2], buffer_length - i - 1);
+				buffer_length--;
+			} else {
+				buffer[i] = gsm7bits_to_unicode[buffer[i]];
+			}
+		}
+	}
 
 	return buffer_length;
 }
