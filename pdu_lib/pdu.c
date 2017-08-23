@@ -298,6 +298,11 @@ int pdu_decode(const unsigned char* buffer, int buffer_length,
 	const int sender_type_of_address = buffer[sms_deliver_start + 2];
 	if (sender_type_of_address == TYPE_OF_ADDRESS_ALPHANUMERIC) {
 		int sms_text_length;
+		for(sms_text_length = 0; sms_text_length < sender_number_length; sms_text_length++) {
+			if((buffer + sms_deliver_start + 3)[sms_text_length] == 0) {
+				break;
+			}
+		}
 		DecodePDUMessage_GSM_7bit(buffer + sms_deliver_start + 3, sender_number_length, output_sender_phone_number, sms_text_length);
 	} else {
 		DecodePhoneNumber(buffer + sms_deliver_start + 3, sender_number_length, output_sender_phone_number);
