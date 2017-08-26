@@ -159,6 +159,53 @@ G7bitToAscii(char* buffer, int buffer_length)
 	return buffer_length;
 }
 
+#define NPC '?'
+
+static const int latin1_to_gsm7bits[256] = {
+  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC, 0x0a,  NPC,-0x0a, 0x0d,  NPC,  NPC,
+  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,
+ 0x20, 0x21, 0x22, 0x23, 0x02, 0x25, 0x26, 0x27, 0x28, 0x29, 0x2a, 0x2b, 0x2c, 0x2d, 0x2e, 0x2f,
+ 0x30, 0x31, 0x32, 0x33, 0x34, 0x35, 0x36, 0x37, 0x38, 0x39, 0x3a, 0x3b, 0x3c, 0x3d, 0x3e, 0x3f,
+ 0x00, 0x41, 0x42, 0x43, 0x44, 0x45, 0x46, 0x47, 0x48, 0x49, 0x4a, 0x4b, 0x4c, 0x4d, 0x4e, 0x4f,
+ 0x50, 0x51, 0x52, 0x53, 0x54, 0x55, 0x56, 0x57, 0x58, 0x59, 0x5a,-0x3c,-0x2f,-0x3e,-0x14, 0x11,
+  NPC, 0x61, 0x62, 0x63, 0x64, 0x65, 0x66, 0x67, 0x68, 0x69, 0x6a, 0x6b, 0x6c, 0x6d, 0x6e, 0x6f,
+ 0x70, 0x71, 0x72, 0x73, 0x74, 0x75, 0x76, 0x77, 0x78, 0x79, 0x7a,-0x28,-0x40,-0x29,-0x3d,  NPC,
+  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,
+  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,
+  NPC, 0x40,  NPC, 0x01, 0x24, 0x03,  NPC, 0x5f,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,
+  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC, 0x60,
+  NPC,  NPC,  NPC,  NPC, 0x5b, 0x0e, 0x1c, 0x09,  NPC, 0x1f,  NPC,  NPC,  NPC,  NPC,  NPC,  NPC,
+  NPC, 0x5d,  NPC,  NPC,  NPC,  NPC, 0x5c,  NPC, 0x0b,  NPC,  NPC,  NPC, 0x5e,  NPC,  NPC, 0x1e,
+ 0x7f,  NPC,  NPC,  NPC, 0x7b, 0x0f, 0x1d,  NPC, 0x04, 0x05,  NPC,  NPC, 0x07,  NPC,  NPC,  NPC,
+  NPC, 0x7d, 0x08,  NPC,  NPC,  NPC, 0x7c,  NPC, 0x0c, 0x06,  NPC,  NPC, 0x7e,  NPC,  NPC,  NPC,
+};
+
+static int
+AsciiToG7bit(const char* buffer, int buffer_length, unsigned char* output_buffer)
+{
+	int i, j, val;
+
+	j=0;
+	for (i = 0; i < buffer_length; i++) {
+		val = latin1_to_gsm7bits[buffer[i] & 0xFF];
+		if (val < 0) {
+			output_buffer[j++] = GSM_7BITS_ESCAPE;
+			output_buffer[j++] = -1*val;
+		} else {
+			if (((buffer[i] & 0xFF) & 0xE0) == 0xC0) { /* test for two byte utf8 char */
+				val = NPC;
+				i++;
+			} else if (((buffer[i] & 0xFF) & 0xF0) == 0xE0) { /* test for three byte utf8 char */
+				val = NPC;
+				i++;
+				i++;
+			}
+			output_buffer[j++] = val;
+		}
+	}
+	return j;
+}
+
 // Encode a digit based phone number for SMS based format.
 static int
 EncodePhoneNumber(const char* phone_number, unsigned char* output_buffer, int buffer_size)
@@ -202,7 +249,7 @@ DecodePhoneNumber(const unsigned char* buffer, int phone_number_length, char* ou
 	output_phone_number[phone_number_length] = '\0';  // Terminate C string.
 	return phone_number_length;
 }
-                        
+
 // Encode a SMS message to PDU
 int
 pdu_encode(const char* service_center_number, const char* phone_number, const char* sms_text,
@@ -249,11 +296,13 @@ pdu_encode(const char* service_center_number, const char* phone_number, const ch
 	output_buffer[output_buffer_length++] = 0xB0;  // TP-VP: Validity: 10 days
 
 	// 5. SMS message.
-	const int sms_text_length = strlen(sms_text);
+	int sms_text_length = strlen(sms_text);
+	char sms_text_7bit[2*SMS_MAX_7BIT_TEXT_LENGTH];
+	sms_text_length = AsciiToG7bit(sms_text, sms_text_length, sms_text_7bit);
 	if (sms_text_length > SMS_MAX_7BIT_TEXT_LENGTH)
 		return -1;
 	output_buffer[output_buffer_length++] = sms_text_length;
-	length = EncodePDUMessage(sms_text, sms_text_length,
+	length = EncodePDUMessage(sms_text_7bit, sms_text_length,
 				  output_buffer + output_buffer_length, 
 				  buffer_size - output_buffer_length);
 	if (length < 0)
