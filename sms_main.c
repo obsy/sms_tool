@@ -433,8 +433,13 @@ int main(int argc, char* argv[])
 		}
 		else
 		{
-			if (EncodePDUMessage(argv[1], sizeof(argv[1]), pdu, SMS_MAX_PDU_LENGTH) > 0)
-				snprintf(cmdstr, sizeof(cmdstr), "AT+CUSD=1,\"%s\",15\r\n", pdu);
+			int pdu_len = EncodePDUMessage(argv[1], strlen(argv[1]), pdu, SMS_MAX_PDU_LENGTH);
+			if (pdu_len > 0)
+			{
+				for (int i = 0; i < pdu_len; ++i)
+					sprintf(pdustr+2*i, "%02X", pdu[i]);
+				snprintf(cmdstr, sizeof(cmdstr), "AT+CUSD=1,\"%s\",15\r\n", pdustr);
+			}
 			else
 				fprintf(stderr, "error encoding to PDU: %s\n", argv[1]);
 		}
@@ -447,6 +452,11 @@ int main(int argc, char* argv[])
 		{
 			if(starts_with("OK", buf))
 				continue;
+			if(starts_with("+CME ERROR:", buf))
+			{
+				fprintf(stderr, "error: %s\n", buf+12);
+				break;
+			}
 			if(starts_with("+CUSD:", buf))
 			{
 				if(sscanf(buf, "+CUSD: 0,\"%[^\"]\",15", ussd_buf) != 1)
@@ -462,8 +472,7 @@ int main(int argc, char* argv[])
 				}
 
 				int l = strlen(ussd_buf);
-				int i;
-				for(i = 0; i < l; i+=2)
+				for(int i = 0; i < l; i+=2)
 					pdu[i/2] = 16*char_to_hex(ussd_buf[i]) + char_to_hex(ussd_buf[i+1]);
 
 				if (DecodePDUMessage_GSM_7bit(pdu, sizeof(pdu), ussd_txt, sizeof(ussd_txt)) > 0)
