@@ -475,7 +475,7 @@ int main(int argc, char* argv[])
 				for(int i = 0; i < l; i+=2)
 					pdu[i/2] = 16*char_to_hex(ussd_buf[i]) + char_to_hex(ussd_buf[i+1]);
 
-				if (DecodePDUMessage_GSM_7bit(pdu, sizeof(pdu), ussd_txt, sizeof(ussd_txt)) > 0)
+				if (DecodePDUMessage_GSM_7bit(pdu, l/2, ussd_txt, sizeof(ussd_txt)) > 0)
 					printf("%s\n", ussd_txt);
 				else
 					fprintf(stderr, "error decoding pdu: %s\n", ussd_buf);
