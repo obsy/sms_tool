@@ -459,7 +459,8 @@ int main(int argc, char* argv[])
 			}
 			if(starts_with("+CUSD:", buf))
 			{
-				if(sscanf(buf, "+CUSD: 0,\"%[^\"]\",15", ussd_buf) != 1)
+				int tmp;
+				if(sscanf(buf, "+CUSD: %d,\"%[^\"]\",", &tmp, ussd_buf) != 2)
 				{
 					fprintf(stderr, "unparsable CUSD response: %s\n", buf+10);
 					break;
