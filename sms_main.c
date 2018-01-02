@@ -328,6 +328,7 @@ int main(int argc, char* argv[])
 				{
 					case 0:
 					case 1:
+					case 241:
 					{
 						printf("%s", sms_txt);
 						break;

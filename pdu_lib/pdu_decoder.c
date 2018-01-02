@@ -58,6 +58,7 @@ int sms_decode()
 	{
 		case 0:
 		case 1:
+		case 241:
 			{
 				printf("%s\n", sms_text);
 				break;

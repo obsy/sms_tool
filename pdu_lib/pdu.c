@@ -367,6 +367,7 @@ int pdu_decode(const unsigned char* buffer, int buffer_length,
 	{
 		case 0:
 		case 1:
+		case 241:
 			{
 				int decoded_sms_text_size = DecodePDUMessage_GSM_7bit(buffer + sms_start + 1, buffer_length - (sms_start + 1),
 							   output_sms_text, output_sms_text_length);
