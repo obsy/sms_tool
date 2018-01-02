@@ -459,8 +459,8 @@ int main(int argc, char* argv[])
 			}
 			if(starts_with("+CUSD:", buf))
 			{
-				int tmp;
-				if(sscanf(buf, "+CUSD: %d,\"%[^\"]\",", &tmp, ussd_buf) != 2)
+				char tmp[8];
+				if(sscanf(buf, "+CUSD:%7[^\"]\"%[^\"]\",", tmp, ussd_buf) != 2)
 				{
 					fprintf(stderr, "unparsable CUSD response: %s\n", buf+10);
 					break;
@@ -476,10 +476,15 @@ int main(int argc, char* argv[])
 				for(int i = 0; i < l; i+=2)
 					pdu[i/2] = 16*char_to_hex(ussd_buf[i]) + char_to_hex(ussd_buf[i+1]);
 
-				if (DecodePDUMessage_GSM_7bit(pdu, l/2, ussd_txt, sizeof(ussd_txt)) > 0)
+				l = DecodePDUMessage_GSM_7bit(pdu, l/2, ussd_txt, sizeof(ussd_txt));
+				if (l > 0) {
+					if (l < sizeof(ussd_txt))
+						ussd_txt[l] = 0;
+
 					printf("%s\n", ussd_txt);
-				else
+				} else {
 					fprintf(stderr, "error decoding pdu: %s\n", ussd_buf);
+				}
 
 				break;
 			}
