@@ -370,7 +370,7 @@ int pdu_decode(const unsigned char* buffer, int buffer_length,
 		*part_number = tmp;
 	}
 
-	const int output_sms_text_length = buffer[sms_start];
+	int output_sms_text_length = buffer[sms_start];
 	if (sms_text_size < output_sms_text_length) return -1;  // Cannot hold decoded buffer.
 
 	const int sms_tp_dcs_start = sms_pid_start + 1;
@@ -385,7 +385,7 @@ int pdu_decode(const unsigned char* buffer, int buffer_length,
 				int decoded_sms_text_size = DecodePDUMessage_GSM_7bit(buffer + sms_start + 1, buffer_length - (sms_start + 1),
 							   output_sms_text, output_sms_text_length);
 				if (decoded_sms_text_size != output_sms_text_length) return -1;  // Decoder length is not as expected.
-				G7bitToAscii(output_sms_text, output_sms_text_length);
+				output_sms_text_length = G7bitToAscii(output_sms_text, output_sms_text_length);
 				break;
 			}
 		case 8:
