@@ -311,18 +311,23 @@ int main(int argc, char* argv[])
 				char sms_txt[161];
 
 				int tp_dcs_type;
+				int total_parts;
+				int part_number;
 				int skip_bytes;
-				
-				int sms_len = pdu_decode(pdu, l/2, &sms_time, phone_str, sizeof(phone_str), sms_txt, sizeof(sms_txt),&tp_dcs_type,&skip_bytes);
+
+				int sms_len = pdu_decode(pdu, l/2, &sms_time, phone_str, sizeof(phone_str), sms_txt, sizeof(sms_txt),&tp_dcs_type,&total_parts,&part_number,&skip_bytes);
 				if (sms_len <= 0) {
 					fprintf(stderr, "error decoding pdu %d: %s\n", count-1, buf);
 					continue;
 				}
-				
+
 				printf("From: %s\n",phone_str);
 				char time_data_str[64];
 				strftime(time_data_str, 64, dateformat, gmtime(&sms_time));
 				printf("Date/Time: %s\n",time_data_str);
+
+				if(total_parts > 0)
+					printf("SMS segment %d of %d\n", part_number, total_parts);
 
 				switch(tp_dcs_type)
 				{
@@ -330,18 +335,17 @@ int main(int argc, char* argv[])
 					case 1:
 					case 241:
 					{
-						printf("%s", sms_txt);
+						int i = skip_bytes;
+						if(skip_bytes > 0) i = (skip_bytes*8+6)/7;
+						for(; i<sms_len; i++)
+						{
+							printf("%c", sms_txt[i]);
+						}
 						break;
 					}
 					case 8:
 					{
-						int i = 0;
-						if((skip_bytes&0x04)==0x04)
-						{
-							i = 0x000000FF&sms_txt[0]+1;
-							printf("SMS segment %d of %d\n",0x000000FF&sms_txt[i-1],0x000000FF&sms_txt[i-2]);
-						}
-						for(;i<sms_len;i+=2)
+						for(int i = skip_bytes;i<sms_len;i+=2)
 						{
 							int ucs2_char = 0x000000FF&sms_txt[i+1];
 							ucs2_char|=(0x0000FF00&(sms_txt[i]<<8));

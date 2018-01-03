@@ -317,7 +317,9 @@ int pdu_decode(const unsigned char* buffer, int buffer_length,
 	       char* output_sender_phone_number, int sender_phone_number_size,
 	       char* output_sms_text, int sms_text_size,
 	       int* tp_dcs,
-	       int* user_payload_header_size)
+	       int* total_parts,
+	       int* part_number,
+	       int* skip_bytes)
 {
 	
 	if (buffer_length <= 0)
@@ -328,8 +330,6 @@ int pdu_decode(const unsigned char* buffer, int buffer_length,
 		return -2;
 
 	const int user_data_header_length = (buffer[sms_deliver_start]>>4);
-
-	*user_payload_header_size = user_data_header_length;
 
 	const int sender_number_length = buffer[sms_deliver_start + 1];
 	if (sender_number_length + 1 > sender_phone_number_size)
@@ -357,12 +357,25 @@ int pdu_decode(const unsigned char* buffer, int buffer_length,
 	const int sms_start = sms_pid_start + 2 + 7;
 	if (sms_start + 1 > buffer_length) return -1;  // Invalid input buffer.
 
+	int tmp;
+	if((user_data_header_length&0x04)==0x04) {
+		tmp = buffer[sms_start + 1] + 1;
+		*skip_bytes = tmp;
+		*total_parts = 0x000000FF&buffer[sms_start + tmp - 1];
+		*part_number = 0x000000FF&buffer[sms_start + tmp];
+	} else {
+		tmp = 0;
+		*skip_bytes = tmp;
+		*total_parts = tmp;
+		*part_number = tmp;
+	}
+
 	const int output_sms_text_length = buffer[sms_start];
 	if (sms_text_size < output_sms_text_length) return -1;  // Cannot hold decoded buffer.
 
 	const int sms_tp_dcs_start = sms_pid_start + 1;
 	*tp_dcs = buffer[sms_tp_dcs_start];
-	
+
 	switch(*tp_dcs)
 	{
 		case 0:
