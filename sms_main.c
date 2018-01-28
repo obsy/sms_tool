@@ -311,11 +311,12 @@ int main(int argc, char* argv[])
 				char sms_txt[161];
 
 				int tp_dcs_type;
+				int ref_number;
 				int total_parts;
 				int part_number;
 				int skip_bytes;
 
-				int sms_len = pdu_decode(pdu, l/2, &sms_time, phone_str, sizeof(phone_str), sms_txt, sizeof(sms_txt),&tp_dcs_type,&total_parts,&part_number,&skip_bytes);
+				int sms_len = pdu_decode(pdu, l/2, &sms_time, phone_str, sizeof(phone_str), sms_txt, sizeof(sms_txt),&tp_dcs_type,&ref_number,&total_parts,&part_number,&skip_bytes);
 				if (sms_len <= 0) {
 					fprintf(stderr, "error decoding pdu %d: %s\n", count-1, buf);
 					continue;
@@ -326,8 +327,10 @@ int main(int argc, char* argv[])
 				strftime(time_data_str, 64, dateformat, gmtime(&sms_time));
 				printf("Date/Time: %s\n",time_data_str);
 
-				if(total_parts > 0)
+				if(total_parts > 0) {
+					printf("Reference number: %d\n", ref_number);
 					printf("SMS segment %d of %d\n", part_number, total_parts);
+				}
 
 				switch(tp_dcs_type)
 				{

@@ -38,6 +38,7 @@ int sms_decode()
 	char sms_phone[40];
 	char sms_text[161];
 	int tp_dcs_type;
+	int ref_number;
 	int total_parts;
 	int part_number;
 	int skip_bytes;
@@ -48,6 +49,7 @@ int sms_decode()
 					sms_phone, sizeof(sms_phone),
 					sms_text, sizeof(sms_text),
 					&tp_dcs_type,
+					&ref_number,
 					&total_parts,
 					&part_number,
 					&skip_bytes);
@@ -58,8 +60,10 @@ int sms_decode()
 	strftime(time_data_str,64,"%D %T", localtime(&sms_time));
 	printf("Date/Time:%s\n",time_data_str);
 
-	if (total_parts > 0)
+	if (total_parts > 0) {
+		printf("Reference number: %d\n", ref_number);
 		printf("SMS segment %d of %d\n", part_number, total_parts);
+	}
 
 	switch(tp_dcs_type)
 	{

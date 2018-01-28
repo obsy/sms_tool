@@ -32,6 +32,7 @@ int pdu_decode(const unsigned char* pdu, int pdu_len,
 	       char* phone_number, int phone_number_size,
 	       char* text, int text_size,
 	       int* tp_dcs,
+	       int* ref_number,
 	       int* total_parts,
 	       int* part_number,
 	       int* skip_bytes);

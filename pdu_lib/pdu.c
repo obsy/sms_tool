@@ -317,6 +317,7 @@ int pdu_decode(const unsigned char* buffer, int buffer_length,
 	       char* output_sender_phone_number, int sender_phone_number_size,
 	       char* output_sms_text, int sms_text_size,
 	       int* tp_dcs,
+	       int* ref_number,
 	       int* total_parts,
 	       int* part_number,
 	       int* skip_bytes)
@@ -361,11 +362,13 @@ int pdu_decode(const unsigned char* buffer, int buffer_length,
 	if((user_data_header_length&0x04)==0x04) {
 		tmp = buffer[sms_start + 1] + 1;
 		*skip_bytes = tmp;
+		*ref_number = 0x000000FF&buffer[sms_start + tmp - 2];
 		*total_parts = 0x000000FF&buffer[sms_start + tmp - 1];
 		*part_number = 0x000000FF&buffer[sms_start + tmp];
 	} else {
 		tmp = 0;
 		*skip_bytes = tmp;
+		*ref_number = tmp;
 		*total_parts = tmp;
 		*part_number = tmp;
 	}
