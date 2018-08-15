@@ -27,12 +27,13 @@ static void usage()
 		"       [options] status\n"
 		"       [options] ussd code\n"
 		"options:\n"
-		"\t-d <tty device> (default: /dev/ttyUSB0)\n"
 		"\t-b <baudrate> (default: 115200)\n"
-		"\t-s <preferred storage> (for sms/recv/status)\n"
+		"\t-d <tty device> (default: /dev/ttyUSB0)\n"
 		"\t-f <date/time format> (for sms/recv)\n"
+		"\t-j json output (for sms/recv)\n"
 		"\t-R use raw input (for ussd)\n"
 		"\t-r use raw output (for ussd and sms/recv)\n"
+		"\t-s <preferred storage> (for sms/recv/status)\n"
 		);
 	exit(2);
 }
@@ -143,13 +144,15 @@ int main(int argc, char* argv[])
 	int baudrate = 115200;
 	int rawinput = 0;
 	int rawoutput = 0;
+	int jsonoutput = 0;
 
-	while ((ch = getopt(argc, argv, "b:d:s:f:Rr")) != -1){
+	while ((ch = getopt(argc, argv, "b:d:s:f:jRr")) != -1){
 		switch (ch) {
 		case 'b': baudrate = atoi(optarg); break;
 		case 'd': dev = optarg; break;
 		case 's': storage = optarg; break;
 		case 'f': dateformat = optarg; break;
+		case 'j': jsonoutput = 1; break;
 		case 'R': rawinput = 1; break;
 		case 'r': rawoutput = 1; break;
 		default:
@@ -277,6 +280,9 @@ int main(int argc, char* argv[])
 		fputs("AT+CMGL=4\r\n", pf);
 		int idx[1024];
 		int count  = 0;
+		if(jsonoutput == 1) {
+			printf("{\"msg\":[");
+		}
 		while(fgets(buf, sizeof buf, pfi))
 		{
 			if(starts_with("OK", buf))
@@ -291,13 +297,24 @@ int main(int argc, char* argv[])
 				if(!fgets(buf, sizeof buf, pfi))
 					fprintf(stderr,"reading pdu %d\n", count);
 
-				printf("MSG: %d\n",idx[count]);
+				if(jsonoutput == 1) {
+					if (count > 0) {
+						printf(",");
+					}
+					printf("{\"index\":%d,",idx[count]);
+				} else {
+					printf("MSG: %d\n",idx[count]);
+				}
 
 				++count;
 
-				if(rawoutput==1)
+				if(rawoutput == 1)
 				{
-					printf("%s\n",buf);
+					if(jsonoutput == 1) {
+						printf("\"content\":\"%s\"", buf);
+					} else {
+						printf("%s\n", buf);
+					}
 					continue;
 				}
 
@@ -322,16 +339,29 @@ int main(int argc, char* argv[])
 					continue;
 				}
 
-				printf("From: %s\n",phone_str);
+				if(jsonoutput == 1) {
+					printf("\"sender\":\"%s\",",phone_str);
+				} else {
+					printf("From: %s\n",phone_str);
+				}
 				char time_data_str[64];
 				strftime(time_data_str, 64, dateformat, gmtime(&sms_time));
-				printf("Date/Time: %s\n",time_data_str);
-
-				if(total_parts > 0) {
-					printf("Reference number: %d\n", ref_number);
-					printf("SMS segment %d of %d\n", part_number, total_parts);
+				if(jsonoutput == 1) {
+					printf("\"timestamp\":\"%s\",",time_data_str);
+				} else {
+					printf("Date/Time: %s\n",time_data_str);
 				}
 
+				if(total_parts > 0) {
+					if(jsonoutput == 1) {
+						printf("\"part\":%d,\"total\":%d,", part_number, total_parts);
+					} else {
+						printf("Reference number: %d\n", ref_number);
+						printf("SMS segment %d of %d\n", part_number, total_parts);
+					}
+				}
+
+				printf("\"content\":\"");
 				switch(tp_dcs_type)
 				{
 					case 0:
@@ -342,6 +372,9 @@ int main(int argc, char* argv[])
 						if(skip_bytes > 0) i = (skip_bytes*8+6)/7;
 						for(; i<sms_len; i++)
 						{
+							if((jsonoutput == 1) && (sms_txt[i] == '"')) {
+								printf("\\");
+							}
 							printf("%c", sms_txt[i]);
 						}
 						break;
@@ -357,6 +390,9 @@ int main(int argc, char* argv[])
 							int j;
 							for(j=0;j<len;j++)
 							{
+								if((jsonoutput == 1) && (utf8_char[j] == '"')) {
+									printf("\\");
+								}
 								printf("%c",utf8_char[j]);
 							}
 						}
@@ -365,9 +401,17 @@ int main(int argc, char* argv[])
 					default:
 						break;
 				}
-				printf("\n\n");
+				if(jsonoutput == 1) {
+					printf("\"}");
+				} else {
+					printf("\n\n");
+				}
 			}
 		}
+		if(jsonoutput == 1) {
+			printf("]}\n");
+		}
+
 	}
 
 	if (!strcmp("delete",argv[0]))
