@@ -138,6 +138,25 @@ static int char_to_hex(char c)
 	return -1;
 }
 
+static void print_json_escape_char(char c1, char c2)
+{
+	if (c1 == 0x0) {
+		if(c2 == '"') printf("\\\"");
+		else if(c2 == '\\') printf("\\\\");
+		else if(c2 == '\b') printf("\\b");
+		else if(c2 == '\n') printf("\\n");
+		else if(c2 == '\f') printf("\\f");
+		else if(c2 == '\r') printf("\\r");
+		else if(c2 == '\t') printf("\\t");
+		else if(c2 == '"') printf("\\\"");
+		else if(c2 == '/') printf("\\/");
+		else if(c2 < ' ') printf("\\u00%02x", c1, c2);
+		else printf("%c", c2);
+	} else {
+		printf("\\u%02x%02x", c1, c2);
+	}
+}
+
 int main(int argc, char* argv[])
 {
 	int ch;
@@ -361,7 +380,9 @@ int main(int argc, char* argv[])
 					}
 				}
 
-				printf("\"content\":\"");
+				if(jsonoutput == 1) {
+					printf("\"content\":\"");
+				}
 				switch(tp_dcs_type)
 				{
 					case 0:
@@ -372,10 +393,11 @@ int main(int argc, char* argv[])
 						if(skip_bytes > 0) i = (skip_bytes*8+6)/7;
 						for(; i<sms_len; i++)
 						{
-							if((jsonoutput == 1) && (sms_txt[i] == '"')) {
-								printf("\\");
+							if(jsonoutput == 1) {
+								print_json_escape_char(0x0, sms_txt[i]);
+							} else {
+								printf("%c", sms_txt[i]);
 							}
-							printf("%c", sms_txt[i]);
 						}
 						break;
 					}
@@ -383,17 +405,18 @@ int main(int argc, char* argv[])
 					{
 						for(int i = skip_bytes;i<sms_len;i+=2)
 						{
-							int ucs2_char = 0x000000FF&sms_txt[i+1];
-							ucs2_char|=(0x0000FF00&(sms_txt[i]<<8));
-							unsigned char utf8_char[5];
-							int len = ucs2_to_utf8(ucs2_char,utf8_char);
-							int j;
-							for(j=0;j<len;j++)
-							{
-								if((jsonoutput == 1) && (utf8_char[j] == '"')) {
-									printf("\\");
+							if(jsonoutput == 1) {
+								print_json_escape_char(sms_txt[i],sms_txt[i+1]);
+							} else {
+								int ucs2_char = 0x000000FF&sms_txt[i+1];
+								ucs2_char|=(0x0000FF00&(sms_txt[i]<<8));
+								unsigned char utf8_char[5];
+								int len = ucs2_to_utf8(ucs2_char,utf8_char);
+								int j;
+								for(j=0;j<len;j++)
+								{
+									printf("%c", utf8_char[j]);
 								}
-								printf("%c",utf8_char[j]);
 							}
 						}
 						break;
