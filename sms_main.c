@@ -511,6 +511,7 @@ int main(int argc, char* argv[])
 			int pdu_len = EncodePDUMessage(argv[1], strlen(argv[1]), pdu, SMS_MAX_PDU_LENGTH);
 			if (pdu_len > 0)
 			{
+				if (pdu[pdu_len - 1] == 0) {pdu[pdu_len - 1] = 0x1d;}
 				for (int i = 0; i < pdu_len; ++i)
 					sprintf(pdustr+2*i, "%02X", pdu[i]);
 				snprintf(cmdstr, sizeof(cmdstr), "AT+CUSD=1,\"%s\",15\r\n", pdustr);
