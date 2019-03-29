@@ -29,6 +29,7 @@ static void usage()
 		"options:\n"
 		"\t-b <baudrate> (default: 115200)\n"
 		"\t-d <tty device> (default: /dev/ttyUSB0)\n"
+		"\t-D debug (for ussd)\n"
 		"\t-f <date/time format> (for sms/recv)\n"
 		"\t-j json output (for sms/recv)\n"
 		"\t-R use raw input (for ussd)\n"
@@ -164,11 +165,13 @@ int main(int argc, char* argv[])
 	int rawinput = 0;
 	int rawoutput = 0;
 	int jsonoutput = 0;
+	int debug = 0;
 
-	while ((ch = getopt(argc, argv, "b:d:s:f:jRr")) != -1){
+	while ((ch = getopt(argc, argv, "b:d:Ds:f:jRr")) != -1){
 		switch (ch) {
 		case 'b': baudrate = atoi(optarg); break;
 		case 'd': dev = optarg; break;
+		case 'D': debug = 1; break;
 		case 's': storage = optarg; break;
 		case 'f': dateformat = optarg; break;
 		case 'j': jsonoutput = 1; break;
@@ -519,6 +522,8 @@ int main(int argc, char* argv[])
 			else
 				fprintf(stderr, "error encoding to PDU: %s\n", argv[1]);
 		}
+		if (debug == 1)
+			printf("debug: %s\n", cmdstr);
 
 		fputs(cmdstr, pf);
 		alarm(10);
@@ -535,6 +540,9 @@ int main(int argc, char* argv[])
 			}
 			if(starts_with("+CUSD:", buf))
 			{
+				if (debug == 1)
+					printf("debug: %s\n", buf);
+
 				char tmp[8];
 				if(sscanf(buf, "+CUSD:%7[^\"]\"%[^\"]\",", tmp, ussd_buf) != 2)
 				{
