@@ -529,6 +529,7 @@ int main(int argc, char* argv[])
 		alarm(10);
 		char ussd_buf[320];
 		char ussd_txt[160];
+		int rc, multiline, tmp1 = 0;
 		while(fgets(buf, sizeof buf, pfi))
 		{
 			if(starts_with("OK", buf))
@@ -544,16 +545,32 @@ int main(int argc, char* argv[])
 					printf("debug: %s\n", buf);
 
 				char tmp[8];
-				if(sscanf(buf, "+CUSD:%7[^\"]\"%[^\"]\",", tmp, ussd_buf) != 2)
+				rc = sscanf(buf, "+CUSD:%7[^\"]\"%[^\"]\",%d", tmp, ussd_buf, &tmp1);
+				if(rc == 2)
 				{
-					fprintf(stderr, "unparsable CUSD response: %s\n", buf+10);
+					if(rawoutput == 1)
+					{
+						multiline = 1;
+						rc = 3;
+					}
+				}
+
+				if(rc != 3)
+				{
+					fprintf(stderr, "unparsable CUSD response: %s\n", buf);
 					break;
 				}
 
-				if(rawoutput==1)
+				if(rawoutput == 1)
 				{
-					printf("%s\n", ussd_buf);
-					break;
+					printf("%s", ussd_buf);
+					if (multiline == 1)
+						continue;
+					else
+					{
+						printf("\n");
+						break;
+					}
 				}
 
 				int l = strlen(ussd_buf);
@@ -571,6 +588,20 @@ int main(int argc, char* argv[])
 				}
 
 				break;
+			}
+			if (multiline == 1)
+			{
+				rc = sscanf(buf, "%[^\"]\",%d", ussd_buf, &tmp1);
+				if (rc == 1)
+				{
+					printf("%s", ussd_buf);
+				}
+				if (rc == 2)
+				{
+					printf("%s\n", ussd_buf);
+					multiline = 0;
+					break;
+				}
 			}
 		}
 	}
