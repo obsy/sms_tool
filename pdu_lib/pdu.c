@@ -20,6 +20,7 @@ enum {
 	BITMASK_HIGH_4BITS = 0xF0,
 	BITMASK_LOW_4BITS = 0x0F,
 
+	TYPE_OF_ADDRESS_UNKNOWN = 0x81,
 	TYPE_OF_ADDRESS_INTERNATIONAL_PHONE = 0x91,
 	TYPE_OF_ADDRESS_NATIONAL_SUBSCRIBER = 0xC8,
 	TYPE_OF_ADDRESS_ALPHANUMERIC = 0xD0,
@@ -281,7 +282,13 @@ pdu_encode(const char* service_center_number, const char* phone_number, const ch
 
 	// 3. Set phone number.
 	output_buffer[output_buffer_length] = strlen(phone_number);
-	output_buffer[output_buffer_length + 1] = TYPE_OF_ADDRESS_INTERNATIONAL_PHONE;
+
+	if (strlen(phone_number) < 6) {
+		output_buffer[output_buffer_length + 1] = TYPE_OF_ADDRESS_UNKNOWN;
+	} else {
+		output_buffer[output_buffer_length + 1] = TYPE_OF_ADDRESS_INTERNATIONAL_PHONE;
+	}
+
 	length = EncodePhoneNumber(phone_number,
 				   output_buffer + output_buffer_length + 2,
 				   buffer_size - output_buffer_length - 2);

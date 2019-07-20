@@ -1,5 +1,5 @@
 /*
- * 2017 Cezary Jackiewicz <cezary@eko.one.pl>
+ * 2017 - 2019 Cezary Jackiewicz <cezary@eko.one.pl>
  * 2014 lovewilliam <ztong@vt.edu>
  * sms tool for various of 3g modem
  */
