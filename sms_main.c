@@ -529,7 +529,7 @@ int main(int argc, char* argv[])
 		alarm(10);
 		char ussd_buf[320];
 		char ussd_txt[160];
-		int rc, multiline, tmp1 = 0;
+		int rc, multiline = 0, tmp1 = 0;
 		while(fgets(buf, sizeof buf, pfi))
 		{
 			if(starts_with("OK", buf))
