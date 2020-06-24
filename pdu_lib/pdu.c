@@ -93,25 +93,27 @@ DecodePDUMessage_GSM_7bit(const unsigned char* buffer, int buffer_length, char* 
 	if (buffer_length > 0)
 		output_sms_text[output_text_length++] = BITMASK_7BITS & buffer[0];
 
-	int carry_on_bits = 1;
-	int i = 1;
-	for (; i < buffer_length; ++i) {
+	if (sms_text_length > 1) {
+		int carry_on_bits = 1;
+		int i = 1;
+		for (; i < buffer_length; ++i) {
 
-		output_sms_text[output_text_length++] = BITMASK_7BITS &	((buffer[i] << carry_on_bits) | (buffer[i - 1] >> (8 - carry_on_bits)));
+			output_sms_text[output_text_length++] = BITMASK_7BITS &	((buffer[i] << carry_on_bits) | (buffer[i - 1] >> (8 - carry_on_bits)));
 
-		if (output_text_length == sms_text_length) break;
-
-		carry_on_bits++;
-
-		if (carry_on_bits == 8) {
-			carry_on_bits = 1;
-			output_sms_text[output_text_length++] = buffer[i] & BITMASK_7BITS;
 			if (output_text_length == sms_text_length) break;
-		}
 
+			carry_on_bits++;
+
+			if (carry_on_bits == 8) {
+				carry_on_bits = 1;
+				output_sms_text[output_text_length++] = buffer[i] & BITMASK_7BITS;
+				if (output_text_length == sms_text_length) break;
+			}
+
+		}
+		if (output_text_length < sms_text_length)  // Add last remainder.
+			output_sms_text[output_text_length++] =	buffer[i - 1] >> (8 - carry_on_bits);
 	}
-	if (output_text_length < sms_text_length)  // Add last remainder.
-		output_sms_text[output_text_length++] =	buffer[i - 1] >> (8 - carry_on_bits);
 
 	return output_text_length;
 }
