@@ -358,6 +358,9 @@ int main(int argc, char* argv[])
 				int sms_len = pdu_decode(pdu, l/2, &sms_time, phone_str, sizeof(phone_str), sms_txt, sizeof(sms_txt),&tp_dcs_type,&ref_number,&total_parts,&part_number,&skip_bytes);
 				if (sms_len <= 0) {
 					fprintf(stderr, "error decoding pdu %d: %s\n", count-1, buf);
+					if(jsonoutput == 1) {
+						printf("\"error\":\"error decoding pdu\",\"sender\":\"\",\"timestamp\":\"\",\"content\":\"\"}");
+					}
 					continue;
 				}
 
