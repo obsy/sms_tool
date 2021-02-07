@@ -1,5 +1,5 @@
 /*
- * 2017 Cezary Jackiewicz <cezary@eko.one.pl>
+ * 2017 - 2021 Cezary Jackiewicz <cezary@eko.one.pl>
  * 2014 lovewilliam <ztong@vt.edu>
  */
 // Copyright 2011 The Avalon Project Authors. All rights reserved.
@@ -388,20 +388,20 @@ int pdu_decode(const unsigned char* buffer, int buffer_length,
 	const int sms_tp_dcs_start = sms_pid_start + 1;
 	*tp_dcs = buffer[sms_tp_dcs_start];
 
-	switch(*tp_dcs)
+	switch((*tp_dcs / 4) % 4)
 	{
 		case 0:
-		case 1:
-		case 241:
 			{
+				// GSM 7 bit
 				int decoded_sms_text_size = DecodePDUMessage_GSM_7bit(buffer + sms_start + 1, buffer_length - (sms_start + 1),
 							   output_sms_text, output_sms_text_length);
 				if (decoded_sms_text_size != output_sms_text_length) return -1;  // Decoder length is not as expected.
 				output_sms_text_length = G7bitToAscii(output_sms_text, output_sms_text_length);
 				break;
 			}
-		case 8:
+		case 2:
 			{
+				// UCS2
 				memcpy(output_sms_text, buffer + sms_start + 1, output_sms_text_length);
 				break;
 			}

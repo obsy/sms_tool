@@ -65,12 +65,11 @@ int sms_decode()
 		printf("SMS segment %d of %d\n", part_number, total_parts);
 	}
 
-	switch(tp_dcs_type)
+	switch((tp_dcs_type / 4) % 4)
 	{
 		case 0:
-		case 1:
-		case 241:
 			{
+				// GSM7 bit
 				int i = skip_bytes;
 				if(skip_bytes > 0) i = (skip_bytes*8+6)/7;
 				for(;i<sms_text_length;i++)
@@ -79,8 +78,9 @@ int sms_decode()
 				}
 				break;
 			}
-		case 8:
+		case 2:
 			{
+				// UCS2
 				for(int i = skip_bytes;i<sms_text_length;i+=2)
 				{
 					int ucs2_char = 0x000000FF&sms_text[i+1];

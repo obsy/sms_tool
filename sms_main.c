@@ -1,5 +1,5 @@
 /*
- * 2017 - 2019 Cezary Jackiewicz <cezary@eko.one.pl>
+ * 2017 - 2021 Cezary Jackiewicz <cezary@eko.one.pl>
  * 2014 lovewilliam <ztong@vt.edu>
  * sms tool for various of 3g modem
  */
@@ -389,12 +389,11 @@ int main(int argc, char* argv[])
 				if(jsonoutput == 1) {
 					printf("\"content\":\"");
 				}
-				switch(tp_dcs_type)
+				switch((tp_dcs_type / 4) % 4)
 				{
 					case 0:
-					case 1:
-					case 241:
 					{
+						// GSM 7 bit
 						int i = skip_bytes;
 						if(skip_bytes > 0) i = (skip_bytes*8+6)/7;
 						for(; i<sms_len; i++)
@@ -407,8 +406,9 @@ int main(int argc, char* argv[])
 						}
 						break;
 					}
-					case 8:
+					case 2:
 					{
+						// UCS2
 						for(int i = skip_bytes;i<sms_len;i+=2)
 						{
 							if(jsonoutput == 1) {
