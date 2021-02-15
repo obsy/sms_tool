@@ -450,7 +450,7 @@ int main(int argc, char* argv[])
 		if(!strcmp("all",argv[1]))
 		{
 			i = 0;
-			j = 50;
+			j = 49;
 		}
 		printf("delete msg from %d to %d\n",i,j);
 		for(;i<=j;i++)
