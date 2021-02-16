@@ -379,7 +379,7 @@ int main(int argc, char* argv[])
 
 				if(total_parts > 0) {
 					if(jsonoutput == 1) {
-						printf("\"part\":%d,\"total\":%d,", part_number, total_parts);
+						printf("\"reference\":%d,\"part\":%d,\"total\":%d,", ref_number, part_number, total_parts);
 					} else {
 						printf("Reference number: %d\n", ref_number);
 						printf("SMS segment %d of %d\n", part_number, total_parts);
