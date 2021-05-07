@@ -8,18 +8,18 @@ SMS Tool for 3G/4G modem
 Usage:
 ----------------
 
-usage: [options] send phoneNumber message
-       [options] recv
-       [options] delete msg_index | all
-       [options] status
-       [options] ussd code
-       [options] at command
-options:
-    -b <baudrate> (default: 115200)
-    -d <tty device> (default: /dev/ttyUSB0)
-    -D debug (for ussd)
-    -f <date/time format> (for sms/recv)
-    -j json output (for sms/recv)
-    -R use raw input (for ussd)
-    -r use raw output (for ussd and sms/recv)
-    -s <preferred storage> (for sms/recv/status)
+    usage: [options] send phoneNumber message
+	    [options] recv
+	    [options] delete msg_index | all
+	    [options] status
+	    [options] ussd code
+	    [options] at command
+    options:
+	    -b <baudrate> (default: 115200)
+	    -d <tty device> (default: /dev/ttyUSB0)
+	    -D debug (for ussd)
+	    -f <date/time format> (for sms/recv)
+	    -j json output (for sms/recv)
+	    -R use raw input (for ussd)
+	    -r use raw output (for ussd and sms/recv)
+	    -s <preferred storage> (for sms/recv/status)
