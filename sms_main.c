@@ -26,6 +26,7 @@ static void usage()
 		"       [options] delete msg_index | all\n"
 		"       [options] status\n"
 		"       [options] ussd code\n"
+		"       [options] at command\n"
 		"options:\n"
 		"\t-b <baudrate> (default: 115200)\n"
 		"\t-d <tty device> (default: /dev/ttyUSB0)\n"
@@ -201,6 +202,8 @@ int main(int argc, char* argv[])
 	}else if (!strcmp("status", argv[0]))
 	{
 	}else if (!strcmp("ussd", argv[0]))
+	{
+	}else if (!strcmp("at", argv[0]))
 	{
 		if(argc < 2)
 			usage();
@@ -606,6 +609,27 @@ int main(int argc, char* argv[])
 					break;
 				}
 			}
+		}
+	}
+
+	if (!strcmp("at", argv[0]))
+	{
+		alarm(5);
+		fputs(argv[1], pf);
+		fputs("\r\n", pf);
+
+		while(fgets(buf, sizeof(buf), pfi)) {
+			if(starts_with("OK", buf))
+				break;
+			if(starts_with("ERROR", buf))
+				break;
+			if(starts_with("COMMAND NOT SUPPORT", buf))
+				break;
+			if(starts_with("+CME ERROR", buf)) {
+				printf("%s\n", buf);
+				break;
+			}
+			printf("%s", buf);
 		}
 	}
 
