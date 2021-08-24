@@ -534,8 +534,8 @@ int main(int argc, char* argv[])
 		fputs(cmdstr, pf);
 		alarm(10);
 		char ussd_buf[320];
-		char ussd_txt[160];
-		int rc, multiline = 0, tmp1 = 0;
+		char ussd_txt[800];
+		int rc, multiline = 0, tp_dcs_type = 0;
 		while(fgets(buf, sizeof buf, pfi))
 		{
 			if(starts_with("OK", buf))
@@ -551,7 +551,7 @@ int main(int argc, char* argv[])
 					printf("debug: %s\n", buf);
 
 				char tmp[8];
-				rc = sscanf(buf, "+CUSD:%7[^\"]\"%[^\"]\",%d", tmp, ussd_buf, &tmp1);
+				rc = sscanf(buf, "+CUSD:%7[^\"]\"%[^\"]\",%d", tmp, ussd_buf, &tp_dcs_type);
 				if(rc == 2)
 				{
 					if(rawoutput == 1)
@@ -583,21 +583,56 @@ int main(int argc, char* argv[])
 				for(int i = 0; i < l; i+=2)
 					pdu[i/2] = 16*char_to_hex(ussd_buf[i]) + char_to_hex(ussd_buf[i+1]);
 
-				l = DecodePDUMessage_GSM_7bit(pdu, l/2, ussd_txt, sizeof(ussd_txt));
-				if (l > 0) {
-					if (l < sizeof(ussd_txt))
-						ussd_txt[l] = 0;
 
-					printf("%s\n", ussd_txt);
-				} else {
-					fprintf(stderr, "error decoding pdu: %s\n", ussd_buf);
+				switch((tp_dcs_type / 4) % 4)
+				{
+					case 0:
+					{
+						// GSM 7 bit
+						l = DecodePDUMessage_GSM_7bit(pdu, l/2, ussd_txt, sizeof(ussd_txt));
+						if (l > 0) {
+							if (l < sizeof(ussd_txt))
+								ussd_txt[l] = 0;
+
+							printf("%s\n", ussd_txt);
+						} else {
+							fprintf(stderr, "error decoding pdu: %s\n", ussd_buf);
+						}
+
+						break;
+					}
+					case 2:
+					{
+						// UCS2
+						// FIXME: interaction with multiline, sample PDUs needed
+						int utf_pos = 0;
+						for(int i = 0;i+1<l/2;i+=2)
+						{
+							int ucs2_char = 0x000000FF&pdu[i+1];
+							ucs2_char|=(0x0000FF00&(pdu[i]<<8));
+							utf_pos += ucs2_to_utf8(ucs2_char,&ussd_txt[utf_pos]);
+						}
+
+						if (utf_pos > 0) {
+							if (utf_pos < sizeof(ussd_txt))
+								ussd_txt[utf_pos] = 0;
+
+							printf("%s\n", ussd_txt);
+						} else {
+							fprintf(stderr, "error decoding pdu: %s\n", ussd_buf);
+						}
+
+						break;
+					}
+					default:
+						break;
 				}
 
 				break;
 			}
 			if (multiline == 1)
 			{
-				rc = sscanf(buf, "%[^\"]\",%d", ussd_buf, &tmp1);
+				rc = sscanf(buf, "%[^\"]\",%d", ussd_buf, &tp_dcs_type);
 				if (rc == 1)
 				{
 					printf("%s", ussd_buf);
