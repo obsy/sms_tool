@@ -511,6 +511,12 @@ int main(int argc, char* argv[])
 
 	if (!strcmp("ussd", argv[0]))
 	{
+		enum sms_charset {
+			SMS_CHARSET_7BIT = 0,
+			SMS_CHARSET_8BIT = 1,
+			SMS_CHARSET_UCS2 = 2,
+		};
+
 		if (rawinput==1)
 		{
 			snprintf(cmdstr, sizeof(cmdstr), "AT+CUSD=1,\"%s\",15\r\n", argv[1]);
@@ -583,10 +589,48 @@ int main(int argc, char* argv[])
 				for(int i = 0; i < l; i+=2)
 					pdu[i/2] = 16*char_to_hex(ussd_buf[i]) + char_to_hex(ussd_buf[i+1]);
 
+				int upper = (tp_dcs_type & 0xf0) >> 4;
+				int lower = tp_dcs_type & 0xf;
+				int coding = -1;
 
-				switch((tp_dcs_type / 4) % 4)
+				if (upper == 0x3 || upper == 0x8 || (upper >= 0xA && upper <= 0xE))
+					coding = -1;
+
+				switch (upper)
 				{
 					case 0:
+						coding = SMS_CHARSET_7BIT;
+						break;
+					case 1:
+						if (lower == 0)
+							coding = SMS_CHARSET_7BIT;
+						if (lower == 1)
+							coding = SMS_CHARSET_UCS2;
+						break;
+					case 2:
+						if (lower <= 4)
+							coding = SMS_CHARSET_7BIT;
+						break;
+					case 4:
+					case 5:
+					case 6:
+					case 7:
+						if (((tp_dcs_type & 0x0c) >> 2) < 3)
+							coding = (enum sms_charset) ((tp_dcs_type & 0x0c) >> 2);
+						break;
+					case 9:
+						if (((tp_dcs_type & 0x0c) >> 2) < 3)
+							coding = (enum sms_charset) ((tp_dcs_type & 0x0c) >> 2);
+						break;
+					case 15:
+						if (lower & 0x4 == 0)
+							coding = SMS_CHARSET_7BIT;
+						break;
+				};
+
+				switch(coding)
+				{
+					case SMS_CHARSET_7BIT:
 					{
 						// GSM 7 bit
 						l = DecodePDUMessage_GSM_7bit(pdu, l/2, ussd_txt, sizeof(ussd_txt));
@@ -601,7 +645,7 @@ int main(int argc, char* argv[])
 
 						break;
 					}
-					case 2:
+					case SMS_CHARSET_UCS2:
 					{
 						// UCS2
 						// FIXME: interaction with multiline, sample PDUs needed
@@ -625,6 +669,7 @@ int main(int argc, char* argv[])
 						break;
 					}
 					default:
+						fprintf(stderr, "unknown coding scheme: %d\n", tp_dcs_type);
 						break;
 				}
 
