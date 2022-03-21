@@ -155,7 +155,7 @@ static void print_json_escape_char(char c1, char c2)
 		else if(c2 < ' ') printf("\\u00%02x", c2);
 		else printf("%c", c2);
 	} else {
-		printf("\\u%02x%02x", c1, c2);
+		printf("\\u%02x%02x", (unsigned char)c1, (unsigned char)c2);
 	}
 }
 
