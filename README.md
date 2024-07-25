@@ -1,4 +1,4 @@
-SMS Tool for 3G/4G modem
+SMS Tool for 3G/4G/5G modem
 ===================
 
 * sms tool for various of 3g/4g modem

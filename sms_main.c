@@ -1,7 +1,7 @@
 /*
- * 2017 - 2021 Cezary Jackiewicz <cezary@eko.one.pl>
+ * 2017 - 2024 Cezary Jackiewicz <cezary@eko.one.pl>
  * 2014 lovewilliam <ztong@vt.edu>
- * sms tool for various of 3g modem
+ * sms tool for various of 3G/4G/5G modem
  */
 #define _GNU_SOURCE
 
@@ -29,6 +29,7 @@ static void usage()
 		"       [options] at command\n"
 		"options:\n"
 		"\t-b <baudrate> (default: 115200)\n"
+		"\t-c coding scheme (for ussd, 0 - 7BIT, 2 - UCS2, default: detect)\n"
 		"\t-d <tty device> (default: /dev/ttyUSB0)\n"
 		"\t-D debug (for ussd and at)\n"
 		"\t-f <date/time format> (for sms/recv)\n"
@@ -167,10 +168,12 @@ int main(int argc, char* argv[])
 	int rawoutput = 0;
 	int jsonoutput = 0;
 	int debug = 0;
+	int dcs = -1;
 
-	while ((ch = getopt(argc, argv, "b:d:Ds:f:jRr")) != -1){
+	while ((ch = getopt(argc, argv, "b:c:d:Ds:f:jRr")) != -1){
 		switch (ch) {
 		case 'b': baudrate = atoi(optarg); break;
+		case 'c': dcs = atoi(optarg); break;
 		case 'd': dev = optarg; break;
 		case 'D': debug = 1; break;
 		case 's': storage = optarg; break;
@@ -627,6 +630,20 @@ int main(int argc, char* argv[])
 							coding = SMS_CHARSET_7BIT;
 						break;
 				};
+
+				switch(dcs)
+				{
+					case SMS_CHARSET_7BIT:
+					{
+						coding = SMS_CHARSET_7BIT;
+						break;
+					}
+					case SMS_CHARSET_UCS2:
+					{
+						coding = SMS_CHARSET_UCS2;
+						break;
+					}
+				}
 
 				switch(coding)
 				{
