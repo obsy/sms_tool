@@ -13,6 +13,7 @@
 
 #include <string.h>
 #include <time.h>
+#include <math.h>
 
 enum {
 	BITMASK_7BITS = 0x7F,
@@ -347,8 +348,10 @@ int pdu_decode(const unsigned char* buffer, int buffer_length,
 
 	const int sender_type_of_address = buffer[sms_deliver_start + 2];
 	if (sender_type_of_address == TYPE_OF_ADDRESS_ALPHANUMERIC) {
-		int sender_len1 = DecodePDUMessage_GSM_7bit(buffer + sms_deliver_start + 3, (sender_number_length + 1) / 2, output_sender_phone_number, sender_number_length);
-		int sender_len2 = G7bitToAscii(output_sender_phone_number, sender_len1 - 1);
+		int sender_len1 = DecodePDUMessage_GSM_7bit(buffer + sms_deliver_start + 3, ceil(sender_number_length * 1.0 / 2), output_sender_phone_number, sender_number_length);
+		if (output_sender_phone_number[sender_len1 - 1] == '\0')
+			sender_len1--;
+		int sender_len2 = G7bitToAscii(output_sender_phone_number, sender_len1);
 		output_sender_phone_number[sender_len2] = 0;
 	} else {
 		DecodePhoneNumber(buffer + sms_deliver_start + 3, sender_number_length, output_sender_phone_number);
