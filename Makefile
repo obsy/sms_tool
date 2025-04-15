@@ -11,14 +11,14 @@ OBJS = pdu_lib/pdu.o pdu_lib/ucs2_to_utf8.o
 all: $(EXE)
 
 $(EXE): sms_main.o pdu_lib
-	$(CC) $(CFLAGS) sms_main.o $(OBJS) -o $(EXE)
+	$(CC) $(CFLAGS) sms_main.o $(OBJS) -lm -o $(EXE)
 
 sms_main.o:
 	$(CC) $(CFLAGS) sms_main.c -c
-	
+
 pdu_lib: force_look
 	cd pdu_lib; CROSS_COMPILE=$(CROSS_COMPILE) $(MAKE) $(MFLAGS)
-	
+
 clean:
 	rm -rf *.o sms_tool
 	for d in $(DIRS); do (cd $$d; $(MAKE) clean); done
@@ -28,4 +28,4 @@ strip:
 
 force_look:
 	true
-	
+

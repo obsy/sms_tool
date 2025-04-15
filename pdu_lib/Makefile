@@ -13,7 +13,7 @@ pdu_decoder.o:
 ucs2_to_utf8:
 	$(CC) $(CFLAGS) -c ucs2_to_utf8.c
 pdu_decoder: pdu.o pdu_decoder.o ucs2_to_utf8
-	$(CC) $(CFLAGS) ucs2_to_utf8.o pdu.o pdu_decoder.o -o pdu_decoder
+	$(CC) $(CFLAGS) ucs2_to_utf8.o pdu.o pdu_decoder.o -lm -o pdu_decoder
 clean:
 	rm -f *.o pdu_decoder
 test: clean ALL
