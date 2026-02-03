@@ -1,5 +1,5 @@
 /*
- * 2017 - 2021 Cezary Jackiewicz <cezary@eko.one.pl>
+ * 2017 - 2026 Cezary Jackiewicz <cezary@eko.one.pl>
  * 2014 lovewilliam <ztong@vt.edu>
  */
 // Copyright 2011 The Avalon Project Authors. All rights reserved.
@@ -143,24 +143,47 @@ static const unsigned char gsm7bits_extend_to_latin1[128] = {
     0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,   0,
 };
 
+static const char* gsm7bits_to_utf8[128] = {
+    [0x10] = "\xCE\x94", // Δ
+    [0x12] = "\xCE\xA6", // Φ
+    [0x13] = "\xCE\x93", // Γ
+    [0x14] = "\xCE\x9B", // Λ
+    [0x15] = "\xCE\xA9", // Ω
+    [0x16] = "\xCE\xA0", // Π
+    [0x17] = "\xCE\xA8", // Ψ
+    [0x18] = "\xCE\xA3", // Σ
+    [0x19] = "\xCE\x98", // Θ
+    [0x1A] = "\xCE\x9E", // Ξ
+};
+
 static int
 G7bitToAscii(char* buffer, int buffer_length)
 {
-	int i;
+	char temp[320];
+	int out_pos = 0;
 
-	for (i = 0; i<buffer_length; i++) {
-		if (buffer[i] < 128) {
-			if (buffer[i] == GSM_7BITS_ESCAPE) {
-				buffer[i] = gsm7bits_extend_to_latin1[buffer[i + 1]];
-				memmove(&buffer[i + 1], &buffer[i + 2], buffer_length - i - 1);
-				buffer_length--;
-			} else {
-				buffer[i] = gsm7bits_to_latin1[buffer[i]];
+	for (int i = 0; i < buffer_length; i++) {
+		unsigned char c = buffer[i];
+		if (c == GSM_7BITS_ESCAPE) {
+			unsigned char next = buffer[i + 1];
+			if (gsm7bits_extend_to_latin1[next]) {
+				temp[out_pos++] = gsm7bits_extend_to_latin1[next];
 			}
+			i++;
+		} else if (c >= 0x10 && c <= 0x1A && gsm7bits_to_utf8[c]) {
+			const char* utf8 = gsm7bits_to_utf8[c];
+			while (*utf8) {
+				temp[out_pos++] = *utf8++;
+			}
+		} else {
+			temp[out_pos++] = gsm7bits_to_latin1[c];
 		}
 	}
 
-	return buffer_length;
+	if (out_pos > buffer_length) out_pos = buffer_length;
+	memcpy(buffer, temp, out_pos);
+
+	return out_pos;
 }
 
 #define NPC '?'
