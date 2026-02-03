@@ -112,7 +112,7 @@ static void resetserial()
 	close(port);
 }
 
-static void timeout()
+static void timeout(int i)
 {
 	fprintf(stderr,"No response from modem.\n");
 	exit(2);
