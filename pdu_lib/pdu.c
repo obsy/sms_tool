@@ -157,12 +157,12 @@ static const char* gsm7bits_to_utf8[128] = {
 };
 
 static int
-G7bitToAscii(char* buffer, int buffer_length)
+G7bitToAscii(int skip, char* buffer, int buffer_length)
 {
 	char temp[320];
-	int out_pos = 0;
+	int out_pos = skip;
 
-	for (int i = 0; i < buffer_length; i++) {
+	for (int i = skip; i < buffer_length; i++) {
 		unsigned char c = buffer[i];
 		if (c == GSM_7BITS_ESCAPE) {
 			unsigned char next = buffer[i + 1];
@@ -374,7 +374,7 @@ int pdu_decode(const unsigned char* buffer, int buffer_length,
 		int sender_len1 = DecodePDUMessage_GSM_7bit(buffer + sms_deliver_start + 3, ceil(sender_number_length * 1.0 / 2), output_sender_phone_number, sender_number_length);
 		if (output_sender_phone_number[sender_len1 - 1] == '\0')
 			sender_len1--;
-		int sender_len2 = G7bitToAscii(output_sender_phone_number, sender_len1);
+		int sender_len2 = G7bitToAscii(0, output_sender_phone_number, sender_len1);
 		output_sender_phone_number[sender_len2] = 0;
 	} else {
 		DecodePhoneNumber(buffer + sms_deliver_start + 3, sender_number_length, output_sender_phone_number);
@@ -424,7 +424,7 @@ int pdu_decode(const unsigned char* buffer, int buffer_length,
 				int decoded_sms_text_size = DecodePDUMessage_GSM_7bit(buffer + sms_start + 1, buffer_length - (sms_start + 1),
 							   output_sms_text, output_sms_text_length);
 				if (decoded_sms_text_size != output_sms_text_length) return -1;  // Decoder length is not as expected.
-				output_sms_text_length = G7bitToAscii(output_sms_text, output_sms_text_length);
+				output_sms_text_length = G7bitToAscii(tmp, output_sms_text, output_sms_text_length);
 				break;
 			}
 		case 2:
