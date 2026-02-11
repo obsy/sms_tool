@@ -353,7 +353,7 @@ int main(int argc, char* argv[])
 
 				time_t sms_time;
 				char phone_str[40];
-				char sms_txt[161];
+				char sms_txt[322];
 
 				int tp_dcs_type;
 				int ref_number;
@@ -405,7 +405,15 @@ int main(int argc, char* argv[])
 						for(; i<sms_len; i++)
 						{
 							if(jsonoutput == 1) {
-								print_json_escape_char(0x0, sms_txt[i]);
+								if ((unsigned char)sms_txt[i] == 0xCE) {
+									unsigned int codepoint = 
+										(((unsigned char)sms_txt[i] & 0x1F) << 6) | 
+										((unsigned char)sms_txt[i + 1] & 0x3F);
+									printf("\\u%04X", codepoint);
+									i++;
+								} else {
+									print_json_escape_char(0x0, sms_txt[i]);
+								}
 							} else {
 								printf("%c", sms_txt[i]);
 							}
