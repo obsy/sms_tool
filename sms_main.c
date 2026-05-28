@@ -143,7 +143,7 @@ static int char_to_hex(char c)
 
 static void print_json_escape_char(char c1, char c2)
 {
-	if (c1 == 0x0) {
+	if (c1 == 0x0 && c2 >= ' ' && c2 <= '~') {
 		if(c2 == '"') printf("\\\"");
 		else if(c2 == '\\') printf("\\\\");
 		else if(c2 == '\b') printf("\\b");
