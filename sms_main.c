@@ -151,7 +151,6 @@ static void print_json_escape_char(char c1, char c2)
 		else if(c2 == '\f') printf("\\f");
 		else if(c2 == '\r') printf("\\r");
 		else if(c2 == '\t') printf("\\t");
-		else if(c2 == '"') printf("\\\"");
 		else if(c2 == '/') printf("\\/");
 		else if(c2 < ' ') printf("\\u00%02x", (unsigned char)c2);
 		else if(c2 > '~') printf("\\u00%02x", (unsigned char)c2);
