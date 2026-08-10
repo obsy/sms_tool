@@ -248,20 +248,17 @@ int main(int argc, char* argv[])
 	char buf[1024];
 	if (!strcmp("send", argv[0]))
 	{
-		int pdu_len = pdu_encode("", argv[1], argv[2], pdu, sizeof(pdu));
+		const unsigned char reference_number =
+			(unsigned char)(time(NULL) ^ getpid());
+		int total_parts = 0;
+		int pdu_len = pdu_encode_multipart("", argv[1], argv[2],
+						 reference_number, 1, &total_parts,
+						 pdu, sizeof(pdu));
 		if (pdu_len < 0) {
 			fprintf(stderr, "error encoding to PDU: %s \"%s\"\n",
 				argv[1], argv[2]);
 			return 1;
 		}
-
-		const int pdu_len_except_smsc = pdu_len - 1 - pdu[0];
-		snprintf(cmdstr, sizeof(cmdstr), "AT+CMGS=%d\r\n", pdu_len_except_smsc);
-
-		int i;
-		for (i = 0; i < pdu_len; ++i)
-			sprintf(pdustr+2*i, "%02X", pdu[i]);
-		sprintf(pdustr+2*i, "%c\r\n", 0x1A);   // End PDU mode with Ctrl-Z.
 
 		alarm(30);
 		if (fputs("AT+CMGF=0\r\n", pf) == EOF)
@@ -281,33 +278,62 @@ int main(int argc, char* argv[])
 			fprintf(stderr, "no response while enabling PDU mode\n");
 			return 1;
 		}
-		if (fputs(cmdstr, pf) == EOF)
-			return 1;
-		sleep(1);
-		if (fputs(pdustr, pf) == EOF)
-			return 1;
+		for (int part_number = 1; part_number <= total_parts; ++part_number) {
+			if (part_number > 1) {
+				int encoded_total_parts;
+				pdu_len = pdu_encode_multipart("", argv[1], argv[2],
+							       reference_number, part_number,
+							       &encoded_total_parts, pdu,
+							       sizeof(pdu));
+				if (pdu_len < 0 || encoded_total_parts != total_parts) {
+					fprintf(stderr, "error encoding SMS part %d/%d\n",
+						part_number, total_parts);
+					return 1;
+				}
+			}
 
-		errno = 0;
+			const int pdu_len_except_smsc = pdu_len - 1 - pdu[0];
+			snprintf(cmdstr, sizeof(cmdstr), "AT+CMGS=%d\r\n",
+				 pdu_len_except_smsc);
+			int i;
+			for (i = 0; i < pdu_len; ++i)
+				sprintf(pdustr + 2 * i, "%02X", pdu[i]);
+			sprintf(pdustr + 2 * i, "%c\r\n", 0x1A);
 
-		while(fgets(buf, sizeof(buf), pfi))
-		{
-			if(starts_with("+CMGS:", buf))
-			{
-				alarm(0);
-				printf("sms sent successfully: %s", buf + 7);
-				return 0;
-			} else if(starts_with("+CMS ERROR:", buf))
-			{
-				fprintf(stderr,"sms not sent, code: %s\n", buf + 11);
+			alarm(30);
+			if (fputs(cmdstr, pf) == EOF)
 				return 1;
-			} else if(starts_with("ERROR", buf))
-			{
-				fprintf(stderr,"sms not sent, command error\n");
+			sleep(1);
+			if (fputs(pdustr, pf) == EOF)
+				return 1;
+
+			errno = 0;
+			int cmgs_received = 0;
+			while(fgets(buf, sizeof(buf), pfi)) {
+				if(starts_with("+CMGS:", buf)) {
+					cmgs_received = 1;
+					if (total_parts == 1)
+						printf("sms sent successfully: %s", buf + 7);
+					else
+						printf("sms part %d/%d sent successfully: %s",
+						       part_number, total_parts, buf + 7);
+				} else if(starts_with("+CMS ERROR:", buf)) {
+					fprintf(stderr,"sms not sent, code: %s\n", buf + 11);
+					return 1;
+				} else if(starts_with("ERROR", buf)) {
+					fprintf(stderr,"sms not sent, command error\n");
+					return 1;
+				} else if(starts_with("OK", buf) && cmgs_received) {
+					break;
+				}
+			}
+			if (!cmgs_received) {
+				fprintf(stderr, "reading port: %s\n", strerror(errno));
 				return 1;
 			}
 		}
-		fprintf(stderr, "reading port: %s\n", strerror(errno));
-		return 1;
+		alarm(0);
+		return 0;
 	}
 
 	if (!strcmp("recv", argv[0]))

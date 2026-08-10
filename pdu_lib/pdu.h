@@ -21,6 +21,16 @@ enum { SMS_MAX_PDU_LENGTH  = 256 };
 int pdu_encode(const char* service_center_number, const char* phone_number, const char* text,
 	      unsigned char* pdu, int pdu_size);
 
+/*
+ * Encode one part of an SMS message. The first call should use part_number 1;
+ * total_parts is then set to the number of PDUs required. Calls for subsequent
+ * parts must use the same reference_number.
+ */
+int pdu_encode_multipart(const char* service_center_number,
+			 const char* phone_number, const char* text,
+			 unsigned char reference_number, int part_number,
+			 int* total_parts, unsigned char* pdu, int pdu_size);
+
 /* 
  * Decode an SMS message. Output the decoded message into the sms text buffer.
  * Returns the length of the SMS dencoded message or a negative number in
