@@ -141,6 +141,110 @@ static int char_to_hex(char c)
 	return -1;
 }
 
+/*
+ * Return 1 for a complete response, 0 when more input is needed and -1 for
+ * malformed input. Some modems split +CUSD after the comma, so parse the
+ * accumulated response rather than a single serial line.
+ */
+static int parse_cusd_response(const char *response, char *payload,
+		size_t payload_size, int *dcs)
+{
+	const char *p = strstr(response, "+CUSD:");
+	char *end;
+
+	if (p == NULL)
+		return -1;
+	p += strlen("+CUSD:");
+	while (isspace((unsigned char)*p))
+		p++;
+
+	errno = 0;
+	(void)strtol(p, &end, 10);
+	if (end == p)
+		return *p == '\0' ? 0 : -1;
+	if (errno == ERANGE)
+		return -1;
+	p = end;
+	while (isspace((unsigned char)*p))
+		p++;
+	if (*p != ',')
+		return *p == '\0' ? 0 : -1;
+	p++;
+	while (isspace((unsigned char)*p))
+		p++;
+	if (*p == '\0')
+		return 0;
+	if (*p++ != '"')
+		return -1;
+
+	const char *payload_start = p;
+	const char *payload_end = strchr(payload_start, '"');
+	if (payload_end == NULL)
+		return 0;
+	if ((size_t)(payload_end - payload_start) >= payload_size)
+		return -1;
+	memcpy(payload, payload_start, (size_t)(payload_end - payload_start));
+	payload[payload_end - payload_start] = '\0';
+
+	p = payload_end + 1;
+	while (isspace((unsigned char)*p))
+		p++;
+	if (*p != ',')
+		return *p == '\0' ? 0 : -1;
+	p++;
+	while (isspace((unsigned char)*p))
+		p++;
+	errno = 0;
+	long value = strtol(p, &end, 10);
+	if (end == p)
+		return *p == '\0' ? 0 : -1;
+	if (errno == ERANGE || value < 0 || value > 255)
+		return -1;
+	*dcs = (int)value;
+	return 1;
+}
+
+static int decode_hex(const char *hex, unsigned char *output, size_t output_size)
+{
+	size_t length = strlen(hex);
+
+	if ((length & 1) != 0 || length / 2 > output_size)
+		return -1;
+	for (size_t i = 0; i < length; i += 2) {
+		int high = char_to_hex(hex[i]);
+		int low = char_to_hex(hex[i + 1]);
+		if (high < 0 || low < 0)
+			return -1;
+		output[i / 2] = (unsigned char)((high << 4) | low);
+	}
+	return (int)(length / 2);
+}
+
+static int looks_like_ucs2(const unsigned char *data, size_t length)
+{
+	size_t printable = 0;
+	size_t zero_high = 0;
+	size_t characters;
+
+	if (length < 4 || (length & 1) != 0)
+		return 0;
+	characters = length / 2;
+	for (size_t i = 0; i < length; i += 2) {
+		unsigned int codepoint = ((unsigned int)data[i] << 8) | data[i + 1];
+		if (codepoint >= 0xd800 && codepoint <= 0xdfff)
+			return 0;
+		if (data[i] == 0)
+			zero_high++;
+		if (codepoint == '\n' || codepoint == '\r' || codepoint == '\t' ||
+				(codepoint >= 0x20 && codepoint != 0x7f))
+			printable++;
+	}
+
+	/* Keep auto-detection conservative to avoid mistaking packed GSM-7. */
+	return zero_high * 4 >= characters * 3 &&
+		printable * 10 >= characters * 9;
+}
+
 static void print_json_escape_char(char c1, char c2)
 {
 	if (c1 == 0x0) {
@@ -213,7 +317,7 @@ int main(int argc, char* argv[])
 
 	signal(SIGALRM,timeout);
 
-	char cmdstr[100];
+	char cmdstr[2 * SMS_MAX_PDU_LENGTH + 32];
 	char pdustr[2*SMS_MAX_PDU_LENGTH+4];
 	unsigned char pdu[SMS_MAX_PDU_LENGTH];
 
@@ -598,9 +702,12 @@ int main(int argc, char* argv[])
 
 		fputs(cmdstr, pf);
 		alarm(10);
-		char ussd_buf[320];
-		char ussd_txt[800];
-		int rc, multiline = 0, tp_dcs_type = 0;
+		char ussd_buf[2 * SMS_MAX_PDU_LENGTH + 1];
+		unsigned char ussd_txt[800];
+		char ussd_response[2048] = "";
+		size_t response_length = 0;
+		int collecting = 0;
+		int tp_dcs_type = 0;
 		while(fgets(buf, sizeof buf, pfi))
 		{
 			if(starts_with("OK", buf))
@@ -610,43 +717,44 @@ int main(int argc, char* argv[])
 				fprintf(stderr, "error: %s\n", buf+12);
 				break;
 			}
-			if(starts_with("+CUSD:", buf))
-			{
-				if (debug == 1)
-					printf("debug: %s\n", buf);
+			if(starts_with("+CUSD:", buf)) {
+				collecting = 1;
+				response_length = 0;
+				ussd_response[0] = '\0';
+			}
+			if (!collecting)
+				continue;
+			if (debug == 1)
+				printf("debug: %s\n", buf);
 
-				char tmp[8];
-				rc = sscanf(buf, "+CUSD:%7[^\"]\"%[^\"]\",%d", tmp, ussd_buf, &tp_dcs_type);
-				if(rc == 2)
-				{
-					if(rawoutput == 1)
-					{
-						multiline = 1;
-						rc = 3;
-					}
-				}
+			size_t line_length = strlen(buf);
+			if (line_length >= sizeof(ussd_response) - response_length) {
+				fprintf(stderr, "CUSD response is too long\n");
+				break;
+			}
+			memcpy(ussd_response + response_length, buf, line_length + 1);
+			response_length += line_length;
 
-				if(rc != 3)
-				{
-					fprintf(stderr, "unparsable CUSD response: %s\n", buf);
-					break;
-				}
+			int rc = parse_cusd_response(ussd_response, ussd_buf,
+					sizeof(ussd_buf), &tp_dcs_type);
+			if (rc == 0)
+				continue;
+			if (rc < 0) {
+				fprintf(stderr, "unparsable CUSD response: %s\n", ussd_response);
+				break;
+			}
 
-				if(rawoutput == 1)
-				{
-					printf("%s", ussd_buf);
-					if (multiline == 1)
-						continue;
-					else
-					{
-						printf("\n");
-						break;
-					}
-				}
+			if(rawoutput == 1) {
+				printf("%s\n", ussd_buf);
+				break;
+			}
 
-				int l = strlen(ussd_buf);
-				for(int i = 0; i < l; i+=2)
-					pdu[i/2] = 16*char_to_hex(ussd_buf[i]) + char_to_hex(ussd_buf[i+1]);
+			int pdu_length = decode_hex(ussd_buf, pdu, sizeof(pdu));
+			if (pdu_length < 0) {
+				/* Some modems return already-decoded text instead of hex. */
+				printf("%s\n", ussd_buf);
+				break;
+			}
 
 				int upper = (tp_dcs_type & 0xf0) >> 4;
 				int lower = tp_dcs_type & 0xf;
@@ -682,10 +790,13 @@ int main(int argc, char* argv[])
 							coding = (enum sms_charset) ((tp_dcs_type & 0x0c) >> 2);
 						break;
 					case 15:
-						if (lower & 0x4 == 0)
+						if ((lower & 0x4) == 0)
 							coding = SMS_CHARSET_7BIT;
 						break;
 				};
+				if (dcs < 0 && coding == SMS_CHARSET_7BIT &&
+						looks_like_ucs2(pdu, (size_t)pdu_length))
+					coding = SMS_CHARSET_UCS2;
 
 				switch(dcs)
 				{
@@ -706,12 +817,13 @@ int main(int argc, char* argv[])
 					case SMS_CHARSET_7BIT:
 					{
 						// GSM 7 bit
-						l = DecodePDUMessage_GSM_7bit(pdu, l/2, ussd_txt, sizeof(ussd_txt));
+						int l = DecodePDUMessage_GSM_7bit(pdu, pdu_length,
+								(char *)ussd_txt, sizeof(ussd_txt));
 						if (l > 0) {
-							if (l < sizeof(ussd_txt))
+							if ((size_t)l < sizeof(ussd_txt))
 								ussd_txt[l] = 0;
 
-							printf("%s\n", ussd_txt);
+							printf("%s\n", (char *)ussd_txt);
 						} else {
 							fprintf(stderr, "error decoding pdu: %s\n", ussd_buf);
 						}
@@ -721,20 +833,25 @@ int main(int argc, char* argv[])
 					case SMS_CHARSET_UCS2:
 					{
 						// UCS2
-						// FIXME: interaction with multiline, sample PDUs needed
-						int utf_pos = 0;
-						for(int i = 0;i+1<l/2;i+=2)
+						size_t utf_pos = 0;
+						for(int i = 0; i + 1 < pdu_length; i += 2)
 						{
 							int ucs2_char = 0x000000FF&pdu[i+1];
 							ucs2_char|=(0x0000FF00&(pdu[i]<<8));
-							utf_pos += ucs2_to_utf8(ucs2_char,&ussd_txt[utf_pos]);
+							unsigned char encoded[4];
+							int encoded_length = ucs2_to_utf8(ucs2_char, encoded);
+							if (encoded_length <= 0 || utf_pos + encoded_length >= sizeof(ussd_txt)) {
+								utf_pos = 0;
+								break;
+							}
+							memcpy(ussd_txt + utf_pos, encoded, (size_t)encoded_length);
+							utf_pos += (size_t)encoded_length;
 						}
 
 						if (utf_pos > 0) {
-							if (utf_pos < sizeof(ussd_txt))
-								ussd_txt[utf_pos] = 0;
+							ussd_txt[utf_pos] = 0;
 
-							printf("%s\n", ussd_txt);
+							printf("%s\n", (char *)ussd_txt);
 						} else {
 							fprintf(stderr, "error decoding pdu: %s\n", ussd_buf);
 						}
@@ -747,21 +864,6 @@ int main(int argc, char* argv[])
 				}
 
 				break;
-			}
-			if (multiline == 1)
-			{
-				rc = sscanf(buf, "%[^\"]\",%d", ussd_buf, &tp_dcs_type);
-				if (rc == 1)
-				{
-					printf("%s", ussd_buf);
-				}
-				if (rc == 2)
-				{
-					printf("%s\n", ussd_buf);
-					multiline = 0;
-					break;
-				}
-			}
 		}
 	}
 
