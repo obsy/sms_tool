@@ -10,6 +10,7 @@
 #include <fcntl.h>
 #include <unistd.h>
 #include <getopt.h>
+#include <poll.h>
 #include <signal.h>
 #include <stdio.h>
 #include <stdlib.h>
@@ -37,6 +38,7 @@ static void usage()
 		"\t-R use raw input (for ussd)\n"
 		"\t-r use raw output (for ussd and sms/recv)\n"
 		"\t-s <preferred storage> (for sms/recv/status)\n"
+		"\t-w <milliseconds> keep reading after OK (for asynchronous at replies)\n"
 		);
 	exit(2);
 }
@@ -273,14 +275,26 @@ int main(int argc, char* argv[])
 	int jsonoutput = 0;
 	int debug = 0;
 	int dcs = -1;
+	int at_wait_ms = 0;
 
-	while ((ch = getopt(argc, argv, "b:c:d:Ds:f:jRr")) != -1){
+	while ((ch = getopt(argc, argv, "b:c:d:Ds:f:jRrw:")) != -1){
 		switch (ch) {
 		case 'b': baudrate = atoi(optarg); break;
 		case 'c': dcs = atoi(optarg); break;
 		case 'd': dev = optarg; break;
 		case 'D': debug = 1; break;
 		case 's': storage = optarg; break;
+		case 'w':
+		{
+			char *end = NULL;
+			long wait = strtol(optarg, &end, 10);
+			if (*optarg == '\0' || *end != '\0' || wait < 0 || wait > 60000) {
+				fprintf(stderr, "Invalid post-OK wait: %s\n", optarg);
+				return 2;
+			}
+			at_wait_ms = (int)wait;
+			break;
+		}
 		case 'f': dateformat = optarg; break;
 		case 'j': jsonoutput = 1; break;
 		case 'R': rawinput = 1; break;
@@ -347,6 +361,10 @@ int main(int argc, char* argv[])
 	if(setvbuf(pf, NULL, _IOLBF, 0))
 	{
 		fprintf(stderr, "failed to make serial port linebuffered\n");
+	}
+	if(!strcmp("at", argv[0]) && setvbuf(pfi, NULL, _IONBF, 0))
+	{
+		fprintf(stderr, "failed to make serial port unbuffered\n");
 	}
 
 	char buf[1024];
@@ -877,7 +895,32 @@ int main(int argc, char* argv[])
 			if(starts_with("OK", buf)) {
 				if (debug == 1)
 					printf("%s", buf);
-				exit(0);
+				if (at_wait_ms == 0)
+					exit(0);
+
+				alarm(0);
+				for (;;) {
+					struct pollfd pfd = {
+						.fd = fileno(pfi),
+						.events = POLLIN,
+					};
+					int rc = poll(&pfd, 1, at_wait_ms);
+					if (rc == 0)
+						exit(0);
+					if (rc < 0) {
+						if (errno == EINTR)
+							continue;
+						fprintf(stderr, "poll(%s): %s\n", dev, strerror(errno));
+						exit(1);
+					}
+					if (pfd.revents & (POLLERR | POLLHUP | POLLNVAL)) {
+						fprintf(stderr, "serial port closed while waiting for response\n");
+						exit(1);
+					}
+					if (fgets(buf, sizeof(buf), pfi) == NULL)
+						exit(1);
+					printf("%s", buf);
+				}
 			}
 			if(starts_with("ERROR", buf)) {
 				if (debug == 1)
