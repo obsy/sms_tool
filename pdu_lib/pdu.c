@@ -11,6 +11,8 @@
 
 #include "pdu.h"
 
+#include <limits.h>
+#include <stdlib.h>
 #include <string.h>
 #include <time.h>
 #include <math.h>
@@ -31,6 +33,9 @@ enum {
 
 	SMS_MAX_7BIT_TEXT_LENGTH  = 160,
 	SMS_MAX_UCS2_TEXT_LENGTH  = 70,
+	SMS_MAX_7BIT_PART_LENGTH  = 153,
+	SMS_MAX_UCS2_PART_LENGTH  = 67,
+	SMS_CONCAT_UDH_LENGTH     = 6,
 };
 
 // Swap decimal digits of a number (e.g. 12 -> 21).
@@ -61,6 +66,11 @@ SwapDecimalNibble(const unsigned char x)
 int
 EncodePDUMessage(const char* sms_text, int sms_text_length, unsigned char* output_buffer, int buffer_size)
 {
+	if (sms_text_length < 0)
+		return -1;
+	if (sms_text_length == 0)
+		return 0;
+
 	// Check if output buffer is big enough.
 	if ((sms_text_length * 7 + 7) / 8 > buffer_size)
 		return -1;
@@ -209,7 +219,7 @@ static const int latin1_to_gsm7bits[256] = {
 };
 
 static int
-AsciiToG7bit(const char* buffer, int buffer_length, char* output_buffer)
+AsciiToG7bit(const char* buffer, int buffer_length, unsigned char* output_buffer)
 {
 	int i, j, val;
 
@@ -324,6 +334,118 @@ NormalizePhoneNumber(const char* phone_number, const char** digits, int* interna
 	return length;
 }
 
+static int
+EncodeSmsText(const char* sms_text, unsigned char** encoded_text, int* use_ucs2)
+{
+	const size_t input_length = strlen(sms_text);
+	if (input_length > (size_t)(INT_MAX - 1) / 2)
+		return -1;
+
+	*use_ucs2 = 0;
+	for (const unsigned char* p = (const unsigned char*)sms_text; *p; ++p) {
+		if (*p & 0x80) {
+			*use_ucs2 = 1;
+			break;
+		}
+	}
+
+	const size_t buffer_size = input_length * 2 + 1;
+	*encoded_text = malloc(buffer_size);
+	if (!*encoded_text)
+		return -1;
+
+	int length;
+	if (*use_ucs2) {
+		length = Utf8ToUcs2(sms_text, *encoded_text, buffer_size);
+	} else {
+		length = AsciiToG7bit(sms_text, input_length, *encoded_text);
+	}
+	if (length < 0) {
+		free(*encoded_text);
+		*encoded_text = NULL;
+	}
+
+	return length;
+}
+
+static int
+GetTextPart(const unsigned char* encoded_text, int encoded_length,
+	    int use_ucs2, int part_number, int* total_parts,
+	    int* part_offset, int* part_length)
+{
+	if (part_number < 1)
+		return -1;
+
+	const int single_part_limit = use_ucs2 ?
+		2 * SMS_MAX_UCS2_TEXT_LENGTH : SMS_MAX_7BIT_TEXT_LENGTH;
+	if (encoded_length <= single_part_limit) {
+		*total_parts = 1;
+		if (part_number != 1)
+			return -1;
+		*part_offset = 0;
+		*part_length = encoded_length;
+		return 0;
+	}
+
+	const int multipart_limit = use_ucs2 ?
+		2 * SMS_MAX_UCS2_PART_LENGTH : SMS_MAX_7BIT_PART_LENGTH;
+	int offset = 0;
+	int count = 0;
+	int requested_offset = -1;
+	int requested_length = -1;
+
+	while (offset < encoded_length) {
+		int length = encoded_length - offset;
+		if (length > multipart_limit)
+			length = multipart_limit;
+		/* Keep a GSM extension escape and its character in the same PDU. */
+		if (!use_ucs2 && offset + length < encoded_length &&
+		    encoded_text[offset + length - 1] == GSM_7BITS_ESCAPE)
+			length--;
+		if (length <= 0 || ++count > 255)
+			return -1;
+		if (count == part_number) {
+			requested_offset = offset;
+			requested_length = length;
+		}
+		offset += length;
+	}
+
+	*total_parts = count;
+	if (requested_offset < 0)
+		return -1;
+	*part_offset = requested_offset;
+	*part_length = requested_length;
+	return 0;
+}
+
+static int
+EncodeMultipartGsm7(const unsigned char* text, int text_length,
+		    const unsigned char* udh, unsigned char* output_buffer,
+		    int buffer_size)
+{
+	const int header_septets = (SMS_CONCAT_UDH_LENGTH * 8 + 6) / 7;
+	const int user_data_length = header_septets + text_length;
+	const int output_length = (user_data_length * 7 + 7) / 8;
+	if (output_length > buffer_size)
+		return -1;
+
+	memset(output_buffer, 0, output_length);
+	memcpy(output_buffer, udh, SMS_CONCAT_UDH_LENGTH);
+
+	for (int i = 0; i < text_length; ++i) {
+		const int bit_position = header_septets * 7 + i * 7;
+		const int byte_position = bit_position / 8;
+		const int shift = bit_position % 8;
+		output_buffer[byte_position] |= (text[i] & BITMASK_7BITS) << shift;
+		if (shift > 1)
+			output_buffer[byte_position + 1] |=
+				(text[i] & BITMASK_7BITS) >> (8 - shift);
+	}
+
+	return output_length;
+}
+
 // Decode a digit based phone number for SMS based format.
 static int
 DecodePhoneNumber(const unsigned char* buffer, int phone_number_length, char* output_phone_number)
@@ -339,13 +461,32 @@ DecodePhoneNumber(const unsigned char* buffer, int phone_number_length, char* ou
 	return phone_number_length;
 }
 
-// Encode a SMS message to PDU
+// Encode one part of an SMS message to PDU.
 int
-pdu_encode(const char* service_center_number, const char* phone_number, const char* sms_text,
-	   unsigned char* output_buffer, int buffer_size)
+pdu_encode_multipart(const char* service_center_number,
+		     const char* phone_number, const char* sms_text,
+		     unsigned char reference_number, int part_number,
+		     int* total_parts, unsigned char* output_buffer,
+		     int buffer_size)
 {	
-	if (!phone_number || !sms_text || !output_buffer || buffer_size < 2)
+	if (!phone_number || !sms_text || !total_parts || !output_buffer ||
+	    buffer_size < 2)
 		return -1;
+
+	unsigned char* encoded_text = NULL;
+	int use_ucs2;
+	const int encoded_length = EncodeSmsText(sms_text, &encoded_text, &use_ucs2);
+	if (encoded_length < 0)
+		return -1;
+
+	int part_offset;
+	int part_length;
+	if (GetTextPart(encoded_text, encoded_length, use_ucs2, part_number,
+			total_parts, &part_offset, &part_length) < 0) {
+		free(encoded_text);
+		return -1;
+	}
+	const int multipart = *total_parts > 1;
 
 	int output_buffer_length = 0;
 
@@ -356,21 +497,21 @@ pdu_encode(const char* service_center_number, const char* phone_number, const ch
 		int service_center_international;
 		if (NormalizePhoneNumber(service_center_number, &service_center_digits,
 					 &service_center_international) < 0)
-			return -1;
+			goto error;
 		output_buffer[1] = TYPE_OF_ADDRESS_INTERNATIONAL_PHONE;
 		length = EncodePhoneNumber(service_center_digits,
 					   output_buffer + 2, buffer_size - 2);
 		if (length < 0 || length >= 254)
-			return -1;
+			goto error;
 		length++;  // Add type of address.
 	}
 	output_buffer[0] = length;
 	output_buffer_length = length + 1;
 	if (output_buffer_length + 4 > buffer_size)
-		return -1;  // Check if it has space for four more bytes.
+		goto error;
 
 	// 2. Set type of message.
-	output_buffer[output_buffer_length++] = SMS_SUBMIT;
+	output_buffer[output_buffer_length++] = SMS_SUBMIT | (multipart ? 0x40 : 0);
 	output_buffer[output_buffer_length++] = 0x00;  // Message reference.
 
 	// 3. Set phone number.
@@ -380,7 +521,7 @@ pdu_encode(const char* service_center_number, const char* phone_number, const ch
 							    &phone_number_digits,
 							    &phone_number_international);
 	if (phone_number_length < 0)
-		return -1;
+		goto error;
 	output_buffer[output_buffer_length] = phone_number_length;
 
 	if (!phone_number_international && phone_number_length < 6) {
@@ -393,20 +534,10 @@ pdu_encode(const char* service_center_number, const char* phone_number, const ch
 				   output_buffer + output_buffer_length + 2,
 				   buffer_size - output_buffer_length - 2);
 	if (length < 0)
-		return -1;
+		goto error;
 	output_buffer_length += length + 2;
 	if (output_buffer_length + 4 > buffer_size)
-		return -1;  // Check if it has space for four more bytes.
-
-
-	/* Use UCS-2 whenever the UTF-8 input is not pure ASCII. */
-	int use_ucs2 = 0;
-	for (const unsigned char* p = (const unsigned char*)sms_text; *p; ++p) {
-		if (*p & 0x80) {
-			use_ucs2 = 1;
-			break;
-		}
-	}
+		goto error;
 
 	// 4. Protocol identifiers.
 	output_buffer[output_buffer_length++] = 0x00;  // TP-PID: Protocol identifier.
@@ -414,33 +545,64 @@ pdu_encode(const char* service_center_number, const char* phone_number, const ch
 	output_buffer[output_buffer_length++] = 0xB0;  // TP-VP: Validity: 10 days
 
 	// 5. SMS message.
-	int sms_text_length = strlen(sms_text);
+	unsigned char udh[SMS_CONCAT_UDH_LENGTH] = {
+		0x05, 0x00, 0x03, reference_number, *total_parts, part_number,
+	};
+	int user_data_header_length = multipart ? SMS_CONCAT_UDH_LENGTH : 0;
 	if (use_ucs2) {
-		unsigned char sms_text_ucs2[2 * SMS_MAX_UCS2_TEXT_LENGTH];
-		sms_text_length = Utf8ToUcs2(sms_text, sms_text_ucs2,
-					      sizeof(sms_text_ucs2));
-		if (sms_text_length < 0 ||
-		    output_buffer_length + 1 + sms_text_length > buffer_size)
-			return -1;
-		output_buffer[output_buffer_length++] = sms_text_length;
-		memcpy(output_buffer + output_buffer_length, sms_text_ucs2,
-		       sms_text_length);
-		return output_buffer_length + sms_text_length;
+		const int user_data_length = user_data_header_length + part_length;
+		if (output_buffer_length + 1 + user_data_length > buffer_size)
+			goto error;
+		output_buffer[output_buffer_length++] = user_data_length;
+		if (multipart) {
+			memcpy(output_buffer + output_buffer_length, udh,
+			       sizeof(udh));
+			output_buffer_length += sizeof(udh);
+		}
+		memcpy(output_buffer + output_buffer_length,
+		       encoded_text + part_offset, part_length);
+		output_buffer_length += part_length;
+		free(encoded_text);
+		return output_buffer_length;
 	}
 
-	char sms_text_7bit[2*SMS_MAX_7BIT_TEXT_LENGTH];
-	sms_text_length = AsciiToG7bit(sms_text, sms_text_length, sms_text_7bit);
-	if (sms_text_length > SMS_MAX_7BIT_TEXT_LENGTH)
-		return -1;
-	output_buffer[output_buffer_length++] = sms_text_length;
-	length = EncodePDUMessage(sms_text_7bit, sms_text_length,
-				  output_buffer + output_buffer_length, 
-				  buffer_size - output_buffer_length);
+	if (multipart) {
+		const int header_septets = (SMS_CONCAT_UDH_LENGTH * 8 + 6) / 7;
+		output_buffer[output_buffer_length++] = header_septets + part_length;
+		length = EncodeMultipartGsm7(encoded_text + part_offset, part_length,
+					     udh,
+					     output_buffer + output_buffer_length,
+					     buffer_size - output_buffer_length);
+	} else {
+		output_buffer[output_buffer_length++] = part_length;
+		length = EncodePDUMessage((const char*)encoded_text, part_length,
+					  output_buffer + output_buffer_length,
+					  buffer_size - output_buffer_length);
+	}
 	if (length < 0)
-		return -1;
+		goto error;
 	output_buffer_length += length;
+	free(encoded_text);
 
 	return output_buffer_length;
+
+error:
+	free(encoded_text);
+	return -1;
+}
+
+// Encode a single-part SMS message to PDU.
+int
+pdu_encode(const char* service_center_number, const char* phone_number,
+	   const char* sms_text, unsigned char* output_buffer, int buffer_size)
+{
+	int total_parts = 0;
+	const int length = pdu_encode_multipart(service_center_number, phone_number,
+						sms_text, 0, 1, &total_parts,
+						output_buffer, buffer_size);
+	if (length < 0 || total_parts > 1)
+		return -1;
+	return length;
 }
 
 int pdu_decode(const unsigned char* buffer, int buffer_length,
