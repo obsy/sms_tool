@@ -30,6 +30,7 @@ enum {
 	SMS_SUBMIT              = 0x11,
 
 	SMS_MAX_7BIT_TEXT_LENGTH  = 160,
+	SMS_MAX_UCS2_TEXT_LENGTH  = 70,
 };
 
 // Swap decimal digits of a number (e.g. 12 -> 21).
@@ -208,7 +209,7 @@ static const int latin1_to_gsm7bits[256] = {
 };
 
 static int
-AsciiToG7bit(const char* buffer, int buffer_length, unsigned char* output_buffer)
+AsciiToG7bit(const char* buffer, int buffer_length, char* output_buffer)
 {
 	int i, j, val;
 
@@ -247,7 +248,7 @@ EncodePhoneNumber(const char* phone_number, unsigned char* output_buffer, int bu
 	int i = 0;
 	for (; i < phone_number_length; ++i) {
 
-		if (phone_number[i] < '0' && phone_number[i] > '9')
+		if (phone_number[i] < '0' || phone_number[i] > '9')
 			return -1;
 
 		if (i % 2 == 0) {
@@ -260,6 +261,67 @@ EncodePhoneNumber(const char* phone_number, unsigned char* output_buffer, int bu
 	}
 
 	return output_buffer_length;
+}
+
+/*
+ * Convert a valid UTF-8 string to UCS-2 (UTF-16BE without surrogate pairs).
+ * SMS UCS-2 user data is limited to 140 octets for a single message.
+ */
+static int
+Utf8ToUcs2(const char* input, unsigned char* output_buffer, int buffer_size)
+{
+	const unsigned char* p = (const unsigned char*)input;
+	int output_buffer_length = 0;
+
+	while (*p) {
+		unsigned int codepoint;
+
+		if (*p < 0x80) {
+			codepoint = *p++;
+		} else if (*p >= 0xC2 && *p <= 0xDF) {
+			if ((p[1] & 0xC0) != 0x80)
+				return -1;
+			codepoint = ((*p & 0x1F) << 6) | (p[1] & 0x3F);
+			p += 2;
+		} else if (*p >= 0xE0 && *p <= 0xEF) {
+			if ((p[1] & 0xC0) != 0x80 || (p[2] & 0xC0) != 0x80)
+				return -1;
+			if ((*p == 0xE0 && p[1] < 0xA0) ||
+			    (*p == 0xED && p[1] >= 0xA0))
+				return -1;
+			codepoint = ((*p & 0x0F) << 12) |
+				    ((p[1] & 0x3F) << 6) | (p[2] & 0x3F);
+			p += 3;
+		} else {
+			/* UCS-2 cannot represent four-byte UTF-8 code points. */
+			return -1;
+		}
+
+		if (output_buffer_length + 2 > buffer_size)
+			return -1;
+		output_buffer[output_buffer_length++] = codepoint >> 8;
+		output_buffer[output_buffer_length++] = codepoint & 0xFF;
+	}
+
+	return output_buffer_length;
+}
+
+static int
+NormalizePhoneNumber(const char* phone_number, const char** digits, int* international)
+{
+	if (!phone_number || !*phone_number)
+		return -1;
+
+	*international = phone_number[0] == '+';
+	*digits = phone_number + *international;
+	if (!**digits)
+		return -1;
+
+	const size_t length = strlen(*digits);
+	if (length > 255)
+		return -1;
+
+	return length;
 }
 
 // Decode a digit based phone number for SMS based format.
@@ -282,7 +344,7 @@ int
 pdu_encode(const char* service_center_number, const char* phone_number, const char* sms_text,
 	   unsigned char* output_buffer, int buffer_size)
 {	
-	if (buffer_size < 2)
+	if (!phone_number || !sms_text || !output_buffer || buffer_size < 2)
 		return -1;
 
 	int output_buffer_length = 0;
@@ -290,10 +352,15 @@ pdu_encode(const char* service_center_number, const char* phone_number, const ch
 	// 1. Set SMS center number.
 	int length = 0;
 	if (service_center_number && strlen(service_center_number) > 0) {
+		const char* service_center_digits;
+		int service_center_international;
+		if (NormalizePhoneNumber(service_center_number, &service_center_digits,
+					 &service_center_international) < 0)
+			return -1;
 		output_buffer[1] = TYPE_OF_ADDRESS_INTERNATIONAL_PHONE;
-		length = EncodePhoneNumber(service_center_number,
+		length = EncodePhoneNumber(service_center_digits,
 					   output_buffer + 2, buffer_size - 2);
-		if (length < 0 && length >= 254)
+		if (length < 0 || length >= 254)
 			return -1;
 		length++;  // Add type of address.
 	}
@@ -307,29 +374,60 @@ pdu_encode(const char* service_center_number, const char* phone_number, const ch
 	output_buffer[output_buffer_length++] = 0x00;  // Message reference.
 
 	// 3. Set phone number.
-	output_buffer[output_buffer_length] = strlen(phone_number);
+	const char* phone_number_digits;
+	int phone_number_international;
+	const int phone_number_length = NormalizePhoneNumber(phone_number,
+							    &phone_number_digits,
+							    &phone_number_international);
+	if (phone_number_length < 0)
+		return -1;
+	output_buffer[output_buffer_length] = phone_number_length;
 
-	if (strlen(phone_number) < 6) {
+	if (!phone_number_international && phone_number_length < 6) {
 		output_buffer[output_buffer_length + 1] = TYPE_OF_ADDRESS_UNKNOWN;
 	} else {
 		output_buffer[output_buffer_length + 1] = TYPE_OF_ADDRESS_INTERNATIONAL_PHONE;
 	}
 
-	length = EncodePhoneNumber(phone_number,
+	length = EncodePhoneNumber(phone_number_digits,
 				   output_buffer + output_buffer_length + 2,
 				   buffer_size - output_buffer_length - 2);
+	if (length < 0)
+		return -1;
 	output_buffer_length += length + 2;
 	if (output_buffer_length + 4 > buffer_size)
 		return -1;  // Check if it has space for four more bytes.
 
 
+	/* Use UCS-2 whenever the UTF-8 input is not pure ASCII. */
+	int use_ucs2 = 0;
+	for (const unsigned char* p = (const unsigned char*)sms_text; *p; ++p) {
+		if (*p & 0x80) {
+			use_ucs2 = 1;
+			break;
+		}
+	}
+
 	// 4. Protocol identifiers.
 	output_buffer[output_buffer_length++] = 0x00;  // TP-PID: Protocol identifier.
-	output_buffer[output_buffer_length++] = 0x00;  // TP-DCS: Data coding scheme.
+	output_buffer[output_buffer_length++] = use_ucs2 ? 0x08 : 0x00;
 	output_buffer[output_buffer_length++] = 0xB0;  // TP-VP: Validity: 10 days
 
 	// 5. SMS message.
 	int sms_text_length = strlen(sms_text);
+	if (use_ucs2) {
+		unsigned char sms_text_ucs2[2 * SMS_MAX_UCS2_TEXT_LENGTH];
+		sms_text_length = Utf8ToUcs2(sms_text, sms_text_ucs2,
+					      sizeof(sms_text_ucs2));
+		if (sms_text_length < 0 ||
+		    output_buffer_length + 1 + sms_text_length > buffer_size)
+			return -1;
+		output_buffer[output_buffer_length++] = sms_text_length;
+		memcpy(output_buffer + output_buffer_length, sms_text_ucs2,
+		       sms_text_length);
+		return output_buffer_length + sms_text_length;
+	}
+
 	char sms_text_7bit[2*SMS_MAX_7BIT_TEXT_LENGTH];
 	sms_text_length = AsciiToG7bit(sms_text, sms_text_length, sms_text_7bit);
 	if (sms_text_length > SMS_MAX_7BIT_TEXT_LENGTH)
@@ -445,4 +543,3 @@ int pdu_decode(const unsigned char* buffer, int buffer_length,
 
 	return output_sms_text_length;
 }
-

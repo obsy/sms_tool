@@ -194,8 +194,6 @@ int main(int argc, char* argv[])
 	{
 		if(argc < 3)
 			usage();
-		if(strlen(argv[2]) > 160)
-			fprintf(stderr,"sms message too long: '%s'\n", argv[2]);
 	}else if (!strcmp("delete",argv[0]))
 	{
 		if(argc < 2)
@@ -222,20 +220,26 @@ int main(int argc, char* argv[])
 	// open the port
 
 	port = open(dev, O_RDWR|O_NONBLOCK|O_NOCTTY);
-	if (port < 0)
-		fprintf(stderr,"open(%s)\n", dev);
+	if (port < 0) {
+		fprintf(stderr, "open(%s): %s\n", dev, strerror(errno));
+		return 1;
+	}
 	setserial(baudrate);
 	atexit(resetserial);
 
 	close(port);
 	port = open(dev, O_RDWR|O_NOCTTY);
-	if (port < 0)
-		fprintf(stderr,"reopen(%s)\n", dev);
+	if (port < 0) {
+		fprintf(stderr, "reopen(%s): %s\n", dev, strerror(errno));
+		return 1;
+	}
 
 	FILE* pf = fdopen(port, "w");
 	FILE* pfi = fdopen(port, "r");
-	if (!pf || ! pfi)
-		fprintf(stderr,"open port failed\n");
+	if (!pf || !pfi) {
+		fprintf(stderr, "fdopen(%s): %s\n", dev, strerror(errno));
+		return 1;
+	}
 	if(setvbuf(pf, NULL, _IOLBF, 0))
 	{
 		fprintf(stderr, "failed to make serial port linebuffered\n");
@@ -245,8 +249,11 @@ int main(int argc, char* argv[])
 	if (!strcmp("send", argv[0]))
 	{
 		int pdu_len = pdu_encode("", argv[1], argv[2], pdu, sizeof(pdu));
-		if (pdu_len < 0)
-			fprintf(stderr,"error encoding to PDU: %s \"%s\n", argv[1], argv[2]);
+		if (pdu_len < 0) {
+			fprintf(stderr, "error encoding to PDU: %s \"%s\"\n",
+				argv[1], argv[2]);
+			return 1;
+		}
 
 		const int pdu_len_except_smsc = pdu_len - 1 - pdu[0];
 		snprintf(cmdstr, sizeof(cmdstr), "AT+CMGS=%d\r\n", pdu_len_except_smsc);
@@ -256,36 +263,51 @@ int main(int argc, char* argv[])
 			sprintf(pdustr+2*i, "%02X", pdu[i]);
 		sprintf(pdustr+2*i, "%c\r\n", 0x1A);   // End PDU mode with Ctrl-Z.
 
-		fputs("AT+CMGF=0\r\n", pf);
+		alarm(30);
+		if (fputs("AT+CMGF=0\r\n", pf) == EOF)
+			return 1;
+		int pdu_mode_ready = 0;
 		while(fgets(buf, sizeof(buf), pfi)) {
-			if(starts_with("OK", buf))
+			if(starts_with("OK", buf)) {
+				pdu_mode_ready = 1;
 				break;
+			}
+			if(starts_with("ERROR", buf) || starts_with("+CMS ERROR:", buf)) {
+				fprintf(stderr, "failed to enable PDU mode: %s", buf);
+				return 1;
+			}
 		}
-		fputs(cmdstr, pf);
+		if (!pdu_mode_ready) {
+			fprintf(stderr, "no response while enabling PDU mode\n");
+			return 1;
+		}
+		if (fputs(cmdstr, pf) == EOF)
+			return 1;
 		sleep(1);
-		fputs(pdustr, pf);
+		if (fputs(pdustr, pf) == EOF)
+			return 1;
 
-		alarm(5);
 		errno = 0;
 
 		while(fgets(buf, sizeof(buf), pfi))
 		{
 			if(starts_with("+CMGS:", buf))
 			{
-				printf("sms sent sucessfully: %s", buf + 7);
+				alarm(0);
+				printf("sms sent successfully: %s", buf + 7);
 				return 0;
 			} else if(starts_with("+CMS ERROR:", buf))
 			{
 				fprintf(stderr,"sms not sent, code: %s\n", buf + 11);
+				return 1;
 			} else if(starts_with("ERROR", buf))
 			{
 				fprintf(stderr,"sms not sent, command error\n");
-			} else if(starts_with("OK", buf))
-			{
-				return 0;
+				return 1;
 			}
 		}
-		fprintf(stderr,"reading port\n");
+		fprintf(stderr, "reading port: %s\n", strerror(errno));
+		return 1;
 	}
 
 	if (!strcmp("recv", argv[0]))
