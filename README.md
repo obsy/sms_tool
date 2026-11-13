@@ -24,6 +24,7 @@ Usage:
 	    -R use raw input (for ussd)
 	    -r use raw output (for ussd and sms/recv)
 	    -s <preferred storage> (for sms/recv/status)
+	    -t <seconds> wait this long for the modem's reply (default: depends on the command)
 	    -w <milliseconds> keep reading after OK (for asynchronous at replies)
 
 Some modems acknowledge vendor-specific AT commands before returning their
@@ -31,3 +32,8 @@ data. Use a post-OK quiet timeout to collect such asynchronous replies, for
 example:
 
     sms_tool -w 1000 -d /dev/ttyUSB2 at "AT+QTEMP"
+
+Some commands take longer than the default wait, a network scan for example.
+Raise the reply timeout for those:
+
+    sms_tool -d /dev/ttyUSB2 -t 180 at 'AT+COPS=?'
