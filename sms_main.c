@@ -38,9 +38,18 @@ static void usage()
 		"\t-R use raw input (for ussd)\n"
 		"\t-r use raw output (for ussd and sms/recv)\n"
 		"\t-s <preferred storage> (for sms/recv/status)\n"
+		"\t-t <seconds> wait this long for the modem's reply (default: depends on the command)\n"
 		"\t-w <milliseconds> keep reading after OK (for asynchronous at replies)\n"
 		);
 	exit(2);
+}
+
+static unsigned int reply_timeout = 0;
+
+/* Start the reply timer: -t if given, otherwise the command's own default. */
+static void reply_alarm(unsigned int def)
+{
+	alarm(reply_timeout ? reply_timeout : def);
 }
 
 static struct termios save_tio;
@@ -277,13 +286,24 @@ int main(int argc, char* argv[])
 	int dcs = -1;
 	int at_wait_ms = 0;
 
-	while ((ch = getopt(argc, argv, "b:c:d:Ds:f:jRrw:")) != -1){
+	while ((ch = getopt(argc, argv, "b:c:d:Ds:f:jRrt:w:")) != -1){
 		switch (ch) {
 		case 'b': baudrate = atoi(optarg); break;
 		case 'c': dcs = atoi(optarg); break;
 		case 'd': dev = optarg; break;
 		case 'D': debug = 1; break;
 		case 's': storage = optarg; break;
+		case 't':
+		{
+			char *end = NULL;
+			long t = strtol(optarg, &end, 10);
+			if (*optarg == '\0' || *end != '\0' || t < 1 || t > 3600) {
+				fprintf(stderr, "Invalid reply timeout: %s\n", optarg);
+				return 2;
+			}
+			reply_timeout = (unsigned int)t;
+			break;
+		}
 		case 'w':
 		{
 			char *end = NULL;
@@ -382,7 +402,7 @@ int main(int argc, char* argv[])
 			return 1;
 		}
 
-		alarm(30);
+		reply_alarm(30);
 		if (fputs("AT+CMGF=0\r\n", pf) == EOF)
 			return 1;
 		int pdu_mode_ready = 0;
@@ -422,7 +442,7 @@ int main(int argc, char* argv[])
 				sprintf(pdustr + 2 * i, "%02X", pdu[i]);
 			sprintf(pdustr + 2 * i, "%c\r\n", 0x1A);
 
-			alarm(30);
+			reply_alarm(30);
 			if (fputs(cmdstr, pf) == EOF)
 				return 1;
 			sleep(1);
@@ -460,7 +480,7 @@ int main(int argc, char* argv[])
 
 	if (!strcmp("recv", argv[0]))
 	{
-		alarm(10);
+		reply_alarm(10);
 		if (strlen(storage) > 0) {
 			fputs("AT+CPMS=\"", pf);
 			fputs(storage, pf);
@@ -658,7 +678,7 @@ int main(int argc, char* argv[])
 
 	if (!strcmp("status", argv[0]))
 	{
-		alarm(10);
+		reply_alarm(10);
 		if (strlen(storage) > 0) {
 			fputs("AT+CPMS=\"", pf);
 			fputs(storage, pf);
@@ -719,7 +739,7 @@ int main(int argc, char* argv[])
 			printf("debug: %s\n", cmdstr);
 
 		fputs(cmdstr, pf);
-		alarm(10);
+		reply_alarm(10);
 		char ussd_buf[2 * SMS_MAX_PDU_LENGTH + 1];
 		unsigned char ussd_txt[800];
 		char ussd_response[2048] = "";
@@ -887,7 +907,7 @@ int main(int argc, char* argv[])
 
 	if (!strcmp("at", argv[0]))
 	{
-		alarm(5);
+		reply_alarm(5);
 		fputs(argv[1], pf);
 		fputs("\r\n", pf);
 
